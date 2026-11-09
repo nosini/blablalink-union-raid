@@ -24,7 +24,10 @@ class Run:
     step: int
     damage: int
     final_hit: bool
-    squad: list = field(default_factory=list)
+    squad: list = field(default_factory=list)  # [{tid, costume_id, lv, combat}]
+    element_id: int = 0
+    icon_id: int = 0
+    monster_model_id: int = 0
 
 
 @dataclass
@@ -89,6 +92,9 @@ def parse(data, lang="en"):
             damage=_int(row.get("total_damage")),
             final_hit=bool(row.get("is_final_hit")),
             squad=row.get("squad") or [],
+            element_id=_int(row.get("element_id")),
+            icon_id=_int(row.get("icon_id")),
+            monster_model_id=_int(row.get("monster_model_id")),
         ))
     return sorted(members.values(), key=lambda m: (-m.total, m.nickname))
 

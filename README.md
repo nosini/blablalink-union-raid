@@ -115,7 +115,15 @@ Carol      -    2  absent              -  3,000,000,000
 
 The API returns one row per run (`participate_data`: `openid`, `nickname`,
 `day`, `boss_id`, `step`, `difficulty`, `level`, `total_damage`,
-`is_final_hit`, `squad`, …). Runs are grouped per member in API order and
+`is_final_hit`, `element_id`, `icon_id`, `monster_model_id`, `name_localvalues`
+and `squad`). The history keeps all of them, with the boss name in the
+language chosen at ingest, including the squad: the characters used in the run with
+their `tid`, `costume_id`, `lv` (character level) and `combat` (combat power).
+`level` is the raid tier of the run; the rows have no player (commander)
+level. `runs-csv` and `json` include the squad, element and boss model.
+
+Databases made by an earlier version are updated when opened. Runs ingested
+before that have no squad data until you ingest their file again. Runs are grouped per member in API order and
 numbered per day, days start at 1. A member's total is the sum of their runs.
 
 ## Tests

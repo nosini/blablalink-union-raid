@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import sqlite3
 import stat
 import tempfile
 import unittest
@@ -82,6 +83,39 @@ class StoreTests(unittest.TestCase):
         self.assertEqual([r.damage for r in loaded[0].day_runs(1)],
                          [900_000_000, 1_200_000_000, 800_000_000])
         self.assertTrue(loaded[0].runs[2].final_hit)
+
+    def test_extra_run_fields_roundtrip(self):
+        store = Store(self.path)
+        store.save("s1", parse(OLD))
+        run = store.load("s1")[0].runs[0]            # Alice's first run
+        self.assertEqual((run.element_id, run.icon_id, run.monster_model_id),
+                         (1, 2001, 5001))
+        self.assertEqual(run.squad[0]["lv"], 200)
+        self.assertEqual(run.squad[0]["tid"], 1001)
+
+    def test_old_database_is_migrated(self):
+        self.path.parent.mkdir(parents=True)
+        db = sqlite3.connect(self.path)
+        db.executescript("""
+            CREATE TABLE seasons (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE, ingested_at TEXT NOT NULL);
+            CREATE TABLE runs (season_id INTEGER NOT NULL, openid TEXT NOT NULL,
+                nickname TEXT NOT NULL, day INTEGER NOT NULL,
+                number INTEGER NOT NULL, boss_id INTEGER NOT NULL,
+                boss_name TEXT NOT NULL, difficulty INTEGER NOT NULL,
+                level INTEGER NOT NULL, step INTEGER NOT NULL,
+                damage INTEGER NOT NULL, final_hit INTEGER NOT NULL);
+            INSERT INTO seasons VALUES (1, 'old', '2026-11-09 20:00:00');
+            INSERT INTO runs VALUES (1, 'o1', 'Alice', 1, 1, 1, 'Boss 1', 1, 1,
+                1, 123, 0);""")
+        db.commit()
+        db.close()
+        store = Store(self.path)                     # opens and migrates
+        (run,) = store.load("old")[0].runs
+        self.assertEqual((run.damage, run.element_id, run.squad), (123, 0, []))
+        store.save("old", parse(OLD))                # re-ingest fills the data
+        self.assertEqual(store.load("old")[0].runs[0].icon_id, 2001)
+        Store(self.path)                             # opening again is fine
 
     def test_resave_replaces_and_keeps_place(self):
         store = Store(self.path)

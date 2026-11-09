@@ -6,6 +6,7 @@ The database holds member names and openids, so it lives in the user's data
 directory (not in this repository) and is only readable by the user.
 """
 
+import json
 import os
 from pathlib import Path
 import re
@@ -32,10 +33,23 @@ CREATE TABLE IF NOT EXISTS runs (
     level INTEGER NOT NULL,
     step INTEGER NOT NULL,
     damage INTEGER NOT NULL,
-    final_hit INTEGER NOT NULL
+    final_hit INTEGER NOT NULL,
+    element_id INTEGER NOT NULL DEFAULT 0,
+    icon_id INTEGER NOT NULL DEFAULT 0,
+    monster_model_id INTEGER NOT NULL DEFAULT 0,
+    squad TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS runs_season ON runs(season_id);
 """
+
+
+# Columns added after the first version; older databases get them on open.
+ADDED_COLUMNS = {
+    "element_id": "INTEGER NOT NULL DEFAULT 0",
+    "icon_id": "INTEGER NOT NULL DEFAULT 0",
+    "monster_model_id": "INTEGER NOT NULL DEFAULT 0",
+    "squad": "TEXT NOT NULL DEFAULT '[]'",
+}
 
 
 class HistoryError(RuntimeError):
@@ -64,6 +78,12 @@ class Store:
         self.db = sqlite3.connect(self.path)
         self.db.execute("PRAGMA foreign_keys = ON")
         self.db.executescript(SCHEMA)
+        have = {row[1] for row in self.db.execute("PRAGMA table_info(runs)")}
+        with self.db:
+            for column, definition in ADDED_COLUMNS.items():
+                if column not in have:
+                    self.db.execute(
+                        f"ALTER TABLE runs ADD COLUMN {column} {definition}")
 
     def close(self):
         self.db.close()
@@ -87,10 +107,14 @@ class Store:
                     "INSERT INTO seasons (name, ingested_at) VALUES (?, ?)",
                     (name, time.strftime("%Y-%m-%d %H:%M:%S"))).lastrowid
             self.db.executemany(
-                "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO runs (season_id, openid, nickname, day, number, "
+                "boss_id, boss_name, difficulty, level, step, damage, "
+                "final_hit, element_id, icon_id, monster_model_id, squad) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [(season_id, m.openid, m.nickname, r.day, r.number,
                   r.boss_id, r.boss_name, r.difficulty, r.level, r.step,
-                  r.damage, int(r.final_hit))
+                  r.damage, int(r.final_hit), r.element_id, r.icon_id,
+                  r.monster_model_id, json.dumps(r.squad))
                  for m in members for r in m.runs])
         return bool(row)
 
@@ -119,11 +143,15 @@ class Store:
                 f"{', '.join(self.names()) or 'none'}")
         members = {}
         for (openid, nickname, day, number, boss_id, boss_name, difficulty,
-             level, step, damage, final_hit) in self.db.execute(
+             level, step, damage, final_hit, element_id, icon_id,
+             monster_model_id, squad) in self.db.execute(
                 "SELECT openid, nickname, day, number, boss_id, boss_name, "
-                "difficulty, level, step, damage, final_hit FROM runs "
+                "difficulty, level, step, damage, final_hit, element_id, "
+                "icon_id, monster_model_id, squad FROM runs "
                 "WHERE season_id = ? ORDER BY rowid", (row[0],)):
             member = members.setdefault(openid, Member(openid, nickname))
-            member.runs.append(Run(day, number, difficulty, level, boss_id,
-                                   boss_name, step, damage, bool(final_hit)))
+            member.runs.append(Run(
+                day, number, difficulty, level, boss_id, boss_name, step,
+                damage, bool(final_hit), json.loads(squad), element_id,
+                icon_id, monster_model_id))
         return sorted(members.values(), key=lambda m: (-m.total, m.nickname))

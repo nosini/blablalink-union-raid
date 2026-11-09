@@ -102,14 +102,17 @@ def runs_csv(members, day=None, previous=None, previous_name="", only=None):
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(["openid", "member", "day", "run", "boss", "difficulty",
-                     "level", "damage", "final_hit"])
+                     "level", "damage", "final_hit", "element_id",
+                     "monster_model_id", "squad"])
     for m in _shown(members, only):
         for r in m.runs:
             if day and r.day != day:
                 continue
             writer.writerow([m.openid, m.nickname, r.day, r.number,
                              r.boss_name, r.difficulty, r.level, r.damage,
-                             int(r.final_hit)])
+                             int(r.final_hit), r.element_id,
+                             r.monster_model_id,
+                             json.dumps(r.squad, separators=(",", ":"))])
     return out.getvalue()
 
 
@@ -148,9 +151,12 @@ def as_json(members, day=None, previous=None, previous_name="", only=None):
             "openid": m.openid,
             "member": m.nickname,
             "total": m.total,
+            "icon_id": next((r.icon_id for r in m.runs), 0),
             "days": {str(d): {"runs": [{"run": r.number, "boss": r.boss_name,
                                         "damage": r.damage,
-                                        "final_hit": r.final_hit}
+                                        "final_hit": r.final_hit,
+                                        "element_id": r.element_id,
+                                        "squad": r.squad}
                                        for r in m.day_runs(d)],
                               "total": m.day_total(d)}
                      for d in days([m]) if not day or d == day},

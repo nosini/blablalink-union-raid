@@ -87,6 +87,18 @@ class Reports(unittest.TestCase):
         self.assertNotIn("Day 1", text)
         self.assertNotIn("Carol", text)
 
+    def test_runs_csv_has_squad_and_boss_model(self):
+        rows = list(__import__("csv").DictReader(
+            io.StringIO(report.runs_csv(self.members))))
+        first = next(r for r in rows if r["member"] == "Alice")
+        self.assertEqual(first["monster_model_id"], "5001")
+        self.assertEqual(json.loads(first["squad"])[0]["lv"], 200)
+
+    def test_json_has_squad_and_icon(self):
+        alice = json.loads(report.as_json(self.members))[0]
+        self.assertEqual(alice["icon_id"], 2001)
+        self.assertEqual(alice["days"]["1"]["runs"][0]["squad"][0]["tid"], 1001)
+
     def test_json(self):
         data = json.loads(report.as_json(self.members))
         self.assertEqual(data[0]["member"], "Alice")
