@@ -24,9 +24,9 @@ def short(n):
 ESC = "\u001b"
 RESET = f"{ESC}[0m"
 COLOURS = {"green": 32, "red": 31, "yellow": 33, "blue": 34, "grey": 30}
-SHEET = ["#", "IGN", "Att", "Damage (M)", "Chg", "Remark"]
+SHEET = ["#", "IGN", "Att", "Dmg (M)", "Chg", "Remark"]
 SHEET_LEFT = {1, 4, 5}
-NAME_WIDTH = 14
+NAME_WIDTH = 12
 
 
 def paint(text, colour):
@@ -150,16 +150,11 @@ def sheet(data, number, before, note):
             sign, colour = "New!", "yellow"
         else:
             sign, colour = change(before[m["openid"]], rank)
-        remarks = []
-        if attempts < full:
-            remarks.append("Unfinished")
-        if finishers:
-            remarks.append(f"Finisher x{finishers}")
-        rows.append(([rank, clip(m["member"]), attempts,
-                      entry["total"] // 10**6, sign, " · ".join(remarks)],
-                     [None, None, None, None, colour,
-                      "red" if attempts < full else
-                      "blue" if finishers else None]))
+        rows.append(([rank, clip(m["member"]), f"{attempts}/{full}",
+                      entry["total"] // 10**6, sign,
+                      f"Finisher x{finishers}" if finishers else ""],
+                     [None, None, "red" if attempts < full else None, None,
+                      colour, "blue" if finishers else None]))
     total = sum(e["total"] for _, e in played)
     intro = f"**Day total** {short(total)} · {len(played)} members\n"
     footer = f"Updated {data['ingested_at']}"
@@ -186,7 +181,7 @@ def season(data):
                  f"{previous} day {number}" if before else "")
 
 
-RUNS = ["Day", "Run", "Boss", "Damage (M)", "Remark"]
+RUNS = ["Day", "Run", "Boss", "Dmg (M)", "Remark"]
 RUNS_LEFT = {2, 4}
 MAX_RUNS = 30
 
@@ -232,7 +227,7 @@ def member(data):
     return result
 
 
-COMPARE = ["#", "IGN", "Damage (M)", "Chg", "Change (M)", "Remark"]
+COMPARE = ["#", "IGN", "Dmg (M)", "Chg", "Δ (M)", "Remark"]
 COMPARE_LEFT = {1, 3, 5}
 
 

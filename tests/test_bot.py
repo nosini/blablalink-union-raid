@@ -53,8 +53,8 @@ class EmbedTest(unittest.TestCase):
         self.assertNotIn("Alice", text)  # Alice never played day 2
         # day 2: Bob 2500, Dave 500. Last season's day 2: Alice 1000,
         # Bob 2100 -> Bob was 1st and stays, Dave is new.
-        self.assertRegex(text, r"1\s+Bob\s+1\s+2500\s+-")
-        self.assertRegex(text, r"2\s+Dave\s+1\s+500\s+New!")
+        self.assertRegex(text, r"1\s+Bob\s+1/1\s+2500\s+-")
+        self.assertRegex(text, r"2\s+Dave\s+1/1\s+500\s+New!")
         self.assertIn("2026-09 day 2", built[-1].footer.text)
 
     def test_season_moves_against_last_seasons_day(self):
@@ -107,7 +107,9 @@ class EmbedTest(unittest.TestCase):
         self.assertEqual(body[1][4], "↓1")
         self.assertEqual(body[2][4], "New!")
         self.assertIn("Finisher x2", " ".join(body[1]))
-        self.assertIn("Unfinished", " ".join(body[3]))
+        self.assertEqual(body[3][2], "2/3")  # Di made 2 of 3 attempts
+        self.assertEqual(body[0][2], "3/3")
+        self.assertIn("\x1b[0;31m2/3", self.text(embeds.day(data, 2)))
         first = self.plain(embeds.day(data, 1))
         self.assertNotIn("↑", first)  # nothing to compare with
 
