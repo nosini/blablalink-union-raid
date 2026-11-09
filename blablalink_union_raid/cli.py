@@ -50,10 +50,24 @@ def cmd_fetch(args):
         print(text)
 
 
-def cmd_push(args):
-    token = os.environ.get("RAID_WRITE_TOKEN")
+def clean_token(value):
+    """The token from RAID_WRITE_TOKEN, without paste framing.
+
+    A hidden prompt (`read -s`) can receive the terminal's bracketed-paste
+    markers around a pasted value, which are not valid in a header.
+    """
+    token = (value or "").replace("\x1b[200~", "").replace("\x1b[201~", "")
+    token = token.strip()
     if not token:
         raise SystemExit("error: set RAID_WRITE_TOKEN")
+    if not token.isascii() or not token.isprintable() or " " in token:
+        raise SystemExit("error: RAID_WRITE_TOKEN has spaces or control "
+                         "characters in it; set it again")
+    return token
+
+
+def cmd_push(args):
+    token = clean_token(os.environ.get("RAID_WRITE_TOKEN"))
     client = Client(args.cookies, browser=args.cookies_from_browser)
     if args.season_id:
         result = client.past_season(args.guild_id, args.area_id, args.season_id)
@@ -70,6 +84,8 @@ def cmd_push(args):
     except urllib.error.HTTPError as exc:
         raise SystemExit(f"error: server said {exc.code}: "
                          f"{exc.read().decode().strip()}")
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"error: can't reach {args.url}: {exc.reason}")
 
 
 def stored_seasons(args):

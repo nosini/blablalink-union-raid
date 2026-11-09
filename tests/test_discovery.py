@@ -6,6 +6,7 @@ import types
 import unittest
 from unittest import mock
 
+from blablalink_union_raid.cli import clean_token
 from blablalink_union_raid.api import ApiError, Client, browser_cookies
 
 
@@ -70,6 +71,16 @@ class BrowserCookiesTest(unittest.TestCase):
     def test_nothing_decrypted(self):
         with self.assertRaises(ApiError):
             self.load([])
+
+
+class TokenTest(unittest.TestCase):
+    def test_paste_framing_is_removed(self):
+        self.assertEqual(clean_token("\x1b[200~abc+/=\x1b[201~\n"), "abc+/=")
+
+    def test_bad_tokens(self):
+        for bad in (None, "", "  ", "a b", "a\x07b", "a\x1b[Ab"):
+            with self.assertRaises(SystemExit):
+                clean_token(bad)
 
 
 if __name__ == "__main__":
