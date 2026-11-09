@@ -185,7 +185,10 @@ Name seasons by their number, not by month: they run about every three
 weeks, so two can fall in one month. The season id is 1000000 plus the
 number (`1000046` is S46), and `push --season-id 1000046` names it `S46` by
 itself. For the running season give `--season S47`. `remove --season NAME`
-deletes a season from the server; pushing a name again replaces it.
+deletes a season from the server; pushing a name again replaces it, unless
+the new data has no runs (`push` then says so and sends nothing, and the
+server refuses it too) or less than half the stored runs (`push --force`
+overrides that).
 
 On the PC, run this from a timer or cron (it re-sends the running season,
 replacing the stored copy):

@@ -6,7 +6,9 @@ Two bearer tokens: the write token (PUT /seasons/<name>, used by `push`) and
 the read token (GET endpoints, used by the Discord bot). TLS and public
 exposure are the reverse proxy's job; this listens on plain HTTP.
 
-    PUT /seasons/<name>      body: JSON written by `fetch`
+    PUT /seasons/<name>      body: JSON written by `fetch`; refused when it
+                             has no runs, or less than half of the stored
+                             runs, unless ?force=1
     DELETE /seasons/<name>   remove a season (write token)
     GET /seasons             one line per stored season
     GET /report?season=&day=&member=
@@ -79,6 +81,7 @@ def make_handler(store, lock, write_token, read_token):
             if not self.authorized(write_token):
                 return
             name = unquote(match.group(1))
+            force = parse_qs(urlsplit(self.path).query).get("force") == ["1"]
             if not NAME.fullmatch(name):
                 return self.reply(400, "bad season name\n")
             length = int(self.headers.get("Content-Length") or 0)
@@ -88,9 +91,16 @@ def make_handler(store, lock, write_token, read_token):
                 members = parse(raid_data(json.loads(self.rfile.read(length))))
             except (ValueError, DataError) as exc:
                 return self.reply(400, f"not union raid data: {exc}\n")
-            with lock:
-                replaced = store.save(name, members)
             runs = sum(len(m.runs) for m in members)
+            if not runs:
+                return self.reply(422, "no runs in this data; not stored\n")
+            with lock:
+                have = store.run_count(name)
+                if have and runs * 2 < have and not force:
+                    return self.reply(
+                        409, f"{name} has {have} runs stored and this has "
+                        f"{runs}; not replaced (use force to override)\n")
+                replaced = store.save(name, members)
             self.reply(200, f"{'replaced' if replaced else 'stored'} {name}: "
                        f"{len(members)} members, {runs} runs\n")
 

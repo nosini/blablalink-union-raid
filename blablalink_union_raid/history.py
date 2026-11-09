@@ -124,6 +124,12 @@ class Store:
                  for m in members for r in m.runs])
         return bool(row)
 
+    def run_count(self, name):
+        """Number of stored runs of a season, 0 if there is none."""
+        return self.db.execute(
+            "SELECT COUNT(*) FROM runs JOIN seasons s ON s.id = season_id "
+            "WHERE s.name = ?", (name,)).fetchone()[0]
+
     def delete(self, name):
         """Remove a season and its runs; False if there is no such season."""
         with self.db:

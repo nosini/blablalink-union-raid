@@ -25,6 +25,13 @@ FORMATS = {
 DATA_KEYS = ("GetUnionRaidData", "GetUnionRaidDataOfGuildSeason")
 
 
+def result_data(result):
+    for key in DATA_KEYS:
+        if key in result:
+            return result[key]
+    return result
+
+
 def load(path):
     with open(path, encoding="utf-8") as stream:
         data = json.load(stream)
@@ -73,10 +80,11 @@ def season_name(season_id):
     return None
 
 
-def send(url, method, name, data=None):
+def send(url, method, name, data=None, force=False):
     """Call the server's /seasons/<name> with the write token."""
     request = urllib.request.Request(
-        f"{url.rstrip('/')}/seasons/{urllib.parse.quote(name)}",
+        f"{url.rstrip('/')}/seasons/{urllib.parse.quote(name)}"
+        + ("?force=1" if force else ""),
         method=method, data=data,
         headers={"Authorization": "Bearer "
                  + clean_token(os.environ.get("RAID_WRITE_TOKEN")),
@@ -102,7 +110,11 @@ def cmd_push(args):
         result = client.past_season(args.guild_id, args.area_id, args.season_id)
     else:
         result = client.current_season(args.guild_id, args.area_id, args.openid)
-    send(args.url, "PUT", name, json.dumps(result).encode())
+    if not any(m.runs for m in parse(result_data(result))):
+        # Expected between seasons; a timer should not fail for it.
+        print(f"no runs yet for {name}; nothing pushed")
+        return
+    send(args.url, "PUT", name, json.dumps(result).encode(), args.force)
 
 
 def cmd_remove(args):
@@ -243,6 +255,9 @@ def build_parser():
     push.add_argument("--area-id", type=int, help="default: your own union")
     push.add_argument("--openid", help="your openid, if the API asks for it")
     push.add_argument("--season-id", help="a past season; omit for the current")
+    push.add_argument("--force", action="store_true",
+                      help="replace a stored season even when this has far "
+                      "fewer runs than it")
     push.set_defaults(func=cmd_push)
 
     remove = sub.add_parser(

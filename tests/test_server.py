@@ -89,6 +89,39 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.call(
             "GET", "/report?format=json", None)[0], 401)
 
+    def test_empty_data_is_never_stored(self):
+        empty = json.dumps({"GetUnionRaidData": {
+            "code": 0, "data": {"participate_data": []}}}).encode()
+        self.put("S1", "season.json")
+        status, text = self.call("PUT", "/seasons/S1", "w-token", empty)
+        self.assertEqual(status, 422)
+        self.assertEqual(self.call("PUT", "/seasons/S2", "w-token", empty)[0],
+                         422)
+        listing = self.call("GET", "/seasons", "r-token")[1]
+        self.assertIn("S1  ", listing)
+        self.assertIn("3 members", listing)  # S1 is intact
+        self.assertNotIn("S2", listing)
+
+    def test_a_much_smaller_push_needs_force(self):
+        self.put("S1", "season.json")           # 9 runs
+        few = json.loads((FIXTURES / "season.json").read_text())
+        rows = None
+        for key in ("GetUnionRaidData", "GetUnionRaidDataOfGuildSeason"):
+            if key in few:
+                rows = few[key]["data"]["participate_data"]
+        if rows is None:
+            rows = few["data"]["participate_data"]
+        del rows[2:]                             # keep 2 of the runs
+        body = json.dumps(few).encode()
+        self.assertEqual(self.call("PUT", "/seasons/S1", "w-token", body)[0],
+                         409)
+        self.assertEqual(self.call(
+            "PUT", "/seasons/S1?force=1", "w-token", body)[0], 200)
+
+    def test_growing_or_equal_pushes_are_fine(self):
+        self.assertEqual(self.put("S1", "season.json")[0], 200)
+        self.assertEqual(self.put("S1", "season.json")[0], 200)
+
     def test_delete_needs_the_write_token(self):
         self.put("old", "season.json")
         self.assertEqual(self.call("DELETE", "/seasons/old", "r-token")[0], 401)

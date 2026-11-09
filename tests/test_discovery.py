@@ -1,11 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from http.cookiejar import Cookie
+import contextlib
+import io
+import os
+from pathlib import Path
 import sys
 import types
 import unittest
 from unittest import mock
 
+from blablalink_union_raid import cli
 from blablalink_union_raid.cli import clean_token, season_name
 from blablalink_union_raid.api import ApiError, Client, browser_cookies
 
@@ -89,6 +94,38 @@ class SeasonNameTest(unittest.TestCase):
         self.assertEqual(season_name("1000009"), "S9")
         for other in ("", "46", "abc", "1000000"):
             self.assertIsNone(season_name(other))
+
+
+class PushTest(unittest.TestCase):
+    def run_push(self, response):
+        class Fetching(Client):
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def current_season(self, *args):
+                return response
+
+        args = cli.build_parser().parse_args([
+            "push", "--url", "http://x", "--season", "S47",
+            "--cookies-from-browser", "brave"])
+        out = io.StringIO()
+        with mock.patch.object(cli, "Client", Fetching), \
+                mock.patch.object(cli, "send") as send, \
+                mock.patch.dict(os.environ, {"RAID_WRITE_TOKEN": "t"}), \
+                contextlib.redirect_stdout(out):
+            cli.cmd_push(args)
+        return send, out.getvalue()
+
+    def test_empty_season_is_not_sent_and_does_not_fail(self):
+        send, text = self.run_push({"GetUnionRaidData": {
+            "code": 0, "data": {"participate_data": []}}})
+        send.assert_not_called()
+        self.assertIn("nothing pushed", text)
+
+    def test_a_season_with_runs_is_sent(self):
+        data = cli.load(Path(__file__).parent / "fixtures" / "season.json")
+        send, _ = self.run_push({"GetUnionRaidData": data})
+        send.assert_called_once()
 
 
 if __name__ == "__main__":
