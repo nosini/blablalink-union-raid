@@ -46,7 +46,20 @@ Export your blablalink.com cookies from the browser as a Netscape
 `.gitignore` excludes `cookies*.txt`). They are only sent to
 `api.blablalink.com`.
 
-The ids appear in the payload of the requests above (Network tab):
+Or let the tool read the login from your browser, as gallery-dl does
+(`pip install gallery-dl`, or `pip install ".[browser]"`):
+replace `--cookies cookies.txt` with `--cookies-from-browser brave`
+(`NAME[+KEYRING][:PROFILE]`, e.g. `brave:Profile 1`, `firefox`). It only
+reads the `.blablalink.com` cookies, and it picks up the browser's renewed
+login every run, so nothing expires on you. Run it on the PC where the
+browser is, while logged in there. gallery-dl is GPL-2.0-only and is not
+bundled, only imported when you use this option.
+
+By default the tool finds your union's `guild_id` and area itself (the
+website's `GetMyGuildInfo` request), so `--guild-id`, `--area-id` and
+`--openid` can be left out. Give them only for another union, or if the
+tool says it can't find them; they appear in the payload of the requests
+above (Network tab):
 
 ```sh
 # current season

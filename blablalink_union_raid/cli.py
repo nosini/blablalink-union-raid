@@ -36,12 +36,10 @@ def load(path):
 
 
 def cmd_fetch(args):
-    client = Client(args.cookies)
+    client = Client(args.cookies, browser=args.cookies_from_browser)
     if args.season_id:
         result = client.past_season(args.guild_id, args.area_id, args.season_id)
     else:
-        if not args.openid:
-            raise SystemExit("--openid is needed for the current season")
         result = client.current_season(args.guild_id, args.area_id, args.openid)
     text = json.dumps(result, indent=2, ensure_ascii=False)
     if args.output:
@@ -56,12 +54,10 @@ def cmd_push(args):
     token = os.environ.get("RAID_WRITE_TOKEN")
     if not token:
         raise SystemExit("error: set RAID_WRITE_TOKEN")
-    client = Client(args.cookies)
+    client = Client(args.cookies, browser=args.cookies_from_browser)
     if args.season_id:
         result = client.past_season(args.guild_id, args.area_id, args.season_id)
     else:
-        if not args.openid:
-            raise SystemExit("--openid is needed for the current season")
         result = client.current_season(args.guild_id, args.area_id, args.openid)
     request = urllib.request.Request(
         f"{args.url.rstrip('/')}/seasons/{urllib.parse.quote(args.season)}",
@@ -173,6 +169,16 @@ def cmd_compare(args):
         print(comparison.table(changes, old_name, new_name))
 
 
+def login(parser):
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--cookies",
+                       help="Netscape cookies.txt exported from the browser")
+    group.add_argument("--cookies-from-browser", metavar="BROWSER",
+                       help="read the login from a browser's cookie store, "
+                       "NAME[+KEYRING][:PROFILE], e.g. brave (needs "
+                       "gallery-dl)")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="blablalink-union-raid",
@@ -181,11 +187,10 @@ def build_parser():
 
     fetch = sub.add_parser(
         "fetch", help="download the raw API responses (needs login cookies)")
-    fetch.add_argument("--cookies", required=True,
-                       help="Netscape cookies.txt exported from the browser")
-    fetch.add_argument("--guild-id", required=True)
-    fetch.add_argument("--area-id", required=True, type=int)
-    fetch.add_argument("--openid", help="your openid, for the current season")
+    login(fetch)
+    fetch.add_argument("--guild-id", help="default: your own union")
+    fetch.add_argument("--area-id", type=int, help="default: your own union")
+    fetch.add_argument("--openid", help="your openid, if the API asks for it")
     fetch.add_argument("--season-id", help="a past season; omit for the current")
     fetch.add_argument("-o", "--output", help="write JSON here, not to stdout")
     fetch.set_defaults(func=cmd_fetch)
@@ -196,10 +201,10 @@ def build_parser():
     push.add_argument("--url", required=True, help="e.g. https://raid.example")
     push.add_argument("--season", required=True,
                       help="name to store it under, e.g. 2026-10")
-    push.add_argument("--cookies", required=True)
-    push.add_argument("--guild-id", required=True)
-    push.add_argument("--area-id", required=True, type=int)
-    push.add_argument("--openid", help="your openid, for the current season")
+    login(push)
+    push.add_argument("--guild-id", help="default: your own union")
+    push.add_argument("--area-id", type=int, help="default: your own union")
+    push.add_argument("--openid", help="your openid, if the API asks for it")
     push.add_argument("--season-id", help="a past season; omit for the current")
     push.set_defaults(func=cmd_push)
 

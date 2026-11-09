@@ -12,6 +12,9 @@ license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
 dependencies = []
 
+[project.optional-dependencies]
+browser = ["gallery-dl", "secretstorage; sys_platform == 'linux'"]
+
 [project.scripts]
 blablalink-union-raid = "blablalink_union_raid.cli:main"
 
