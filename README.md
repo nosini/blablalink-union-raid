@@ -76,11 +76,11 @@ python -m blablalink_union_raid compare --format csv     # or json
 
 ```
 2026-09 -> 2026-10
-Member  Rank  Was  Move            Total            Was          Change
-Bob        1    3  up 2    5,500,000,000  2,600,000,000  +2,900,000,000
-Dave       2    -  new     2,500,000,000              -
-Alice      3    1  down 2  1,000,000,000  3,900,000,000  -2,900,000,000
-Carol      -    2  absent              -  3,000,000,000
+Member  Rank  Was  Move          Lv          Total            Was          Change
+Bob        1    3  up 2    522 (+2)  5,500,000,000  2,600,000,000  +2,900,000,000
+Dave       2    -  new          480  2,500,000,000              -
+Alice      3    1  down 2  530 (+2)  1,000,000,000  3,900,000,000  -2,900,000,000
+Carol      -    2  absent         -              -  3,000,000,000
 ```
 
 - `report` reads a stored season too, without the JSON file:
@@ -96,6 +96,8 @@ Carol      -    2  absent              -  3,000,000,000
   what is shown; ranks are always those of the whole union.
 - Rank is by total damage in the season, highest first. Members are matched
   by openid, so a renamed member keeps their history and shows the new name.
+- `Lv` is the member's level now, with the change since the older season in
+  brackets when both seasons have it (see Data).
 - `new`: wasn't in the older season. `absent`: has no runs in the newer one.
   The data only lists members who fought, so absent can also mean a member who
   skipped the raid, not only one who left the union.

@@ -16,6 +16,15 @@ class Change:
     prev_rank: int | None   # None: didn't take part in the older season
     total: int
     prev_total: int
+    level: int = 0          # 0: unknown (no squad data stored)
+    prev_level: int = 0
+
+    @property
+    def level_change(self):
+        """Levels gained; None unless the level is known in both seasons."""
+        if self.level and self.prev_level:
+            return self.level - self.prev_level
+        return None
 
     @property
     def move(self):
@@ -61,22 +70,36 @@ def compare(old, new):
             prev_rank=prev_rank,
             total=member.total if member else 0,
             prev_total=prev_member.total if prev_member else 0,
+            level=member.level if member else 0,
+            prev_level=prev_member.level if prev_member else 0,
         ))
     return sorted(changes, key=lambda c: (
         c.rank is None, c.rank or 0, c.prev_rank or 0, c.nickname))
 
 
+def _level(c):
+    """'530 (+2)': the level now and, when known for both, the change."""
+    if not c.rank or not c.level:
+        return "-"
+    change = c.level_change
+    return f"{c.level} ({change:+d})" if change else str(c.level)
+
+
 def table(changes, old_name, new_name):
-    header = ["Member", "Rank", "Was", "Move", "Total", "Was", "Change"]
+    leveled = any(c.level or c.prev_level for c in changes)
+    header = ["Member", "Rank", "Was", "Move"] + (["Lv"] if leveled else []) \
+        + ["Total", "Was", "Change"]
     rows = [[c.nickname,
              "-" if c.rank is None else str(c.rank),
              "-" if c.prev_rank is None else str(c.prev_rank),
-             c.status,
-             f"{c.total:,}" if c.rank else "-",
-             f"{c.prev_total:,}" if c.prev_rank else "-",
-             f"{c.delta:+,}" if c.rank and c.prev_rank else ""]
+             c.status]
+            + ([_level(c)] if leveled else [])
+            + [f"{c.total:,}" if c.rank else "-",
+               f"{c.prev_total:,}" if c.prev_rank else "-",
+               f"{c.delta:+,}" if c.rank and c.prev_rank else ""]
             for c in changes]
-    widths = [max(len(r[i]) for r in [header] + rows) for i in range(7)]
+    widths = [max(len(r[i]) for r in [header] + rows)
+              for i in range(len(header))]
 
     def line(cells):
         return "  ".join(cell.ljust(w) if i in (0, 3) else cell.rjust(w)
@@ -89,13 +112,16 @@ def as_csv(changes):
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(["openid", "member", "rank", "prev_rank", "move",
-                     "status", "total", "prev_total", "delta"])
+                     "status", "total", "prev_total", "delta", "level",
+                     "prev_level", "level_change"])
     for c in changes:
         writer.writerow([c.openid, c.nickname,
                          "" if c.rank is None else c.rank,
                          "" if c.prev_rank is None else c.prev_rank,
                          "" if c.move is None else c.move, c.status,
-                         c.total, c.prev_total, c.delta])
+                         c.total, c.prev_total, c.delta, c.level or "",
+                         c.prev_level or "",
+                         "" if c.level_change is None else c.level_change])
     return out.getvalue()
 
 
@@ -106,5 +132,8 @@ def as_json(changes, old_name, new_name):
                      "rank": c.rank, "prev_rank": c.prev_rank,
                      "move": c.move, "status": c.status,
                      "total": c.total, "prev_total": c.prev_total,
-                     "delta": c.delta} for c in changes],
+                     "delta": c.delta,
+                     "level": c.level or None,
+                     "prev_level": c.prev_level or None,
+                     "level_change": c.level_change} for c in changes],
     }, indent=2, ensure_ascii=False)

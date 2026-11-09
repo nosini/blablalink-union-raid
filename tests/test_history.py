@@ -43,6 +43,22 @@ class Compare(unittest.TestCase):
         self.assertEqual(changes["Carol"].status, "absent")
         self.assertIsNone(changes["Carol"].rank)
 
+    def test_level_and_its_change(self):
+        changes = self.changes()
+        self.assertEqual((changes["Alice"].level, changes["Alice"].prev_level,
+                          changes["Alice"].level_change), (530, 528, 2))
+        self.assertEqual(changes["Bob"].level_change, 2)
+        self.assertIsNone(changes["Dave"].level_change)   # new: no earlier level
+        self.assertEqual(changes["Carol"].level, 0)       # absent: none now
+
+    def test_unknown_levels_hide_the_column(self):
+        old = [member("a", "A", 10)]
+        new = [member("a", "A", 20)]
+        text = compare.table(compare.compare(old, new), "x", "y")
+        self.assertNotIn("Lv", text)
+        (change,) = compare.compare(old, new)
+        self.assertIsNone(change.level_change)
+
     def test_order_is_current_rank_then_absent(self):
         names = [c.nickname for c in compare.compare(parse(OLD), parse(NEW))]
         self.assertEqual(names, ["Bob", "Dave", "Alice", "Carol"])
@@ -62,9 +78,20 @@ class Compare(unittest.TestCase):
 
     def test_renderers(self):
         changes = compare.compare(parse(OLD), parse(NEW))
-        self.assertIn("up 2", compare.table(changes, "a", "b"))
-        self.assertEqual(compare.as_csv(changes).splitlines()[1].split(",")[:3],
-                         ["o2", "Bob", "1"])
+        text = compare.table(changes, "a", "b")
+        self.assertIn("up 2", text)
+        self.assertRegex(text, r"Bob\s+1\s+3\s+up 2\s+522 \(\+2\)")
+        self.assertRegex(text, r"Alice\s+3\s+1\s+down 2\s+530 \(\+2\)")
+        self.assertRegex(text, r"Dave\s+2\s+-\s+new\s+480\s")
+        self.assertRegex(text, r"Carol\s+-\s+2\s+absent\s+-\s")
+        rows = compare.as_csv(changes).splitlines()
+        self.assertEqual(rows[0].split(",")[-3:],
+                         ["level", "prev_level", "level_change"])
+        self.assertEqual(rows[1].split(",")[:3], ["o2", "Bob", "1"])
+        self.assertEqual(rows[1].split(",")[-3:], ["522", "520", "2"])
+        bob = json.loads(compare.as_json(changes, "a", "b"))["members"][0]
+        self.assertEqual((bob["level"], bob["prev_level"], bob["level_change"]),
+                         (522, 520, 2))
         self.assertEqual(json.loads(compare.as_json(changes, "a", "b"))["to"], "b")
 
 
