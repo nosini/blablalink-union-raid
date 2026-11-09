@@ -41,7 +41,6 @@ class EmbedTest(unittest.TestCase):
         self.assertEqual(embeds.short(5_500_000_000), "5.50B")
         self.assertEqual(embeds.short(950_000_000), "950.0M")
         self.assertEqual(embeds.short(1234), "1K")
-        self.assertEqual(embeds.signed(-2_900_000_000), "-2.90B")
 
     def plain(self, built):
         return re.sub("\x1b\\[[0-9;]*m", "", self.text(built))
@@ -93,21 +92,37 @@ class EmbedTest(unittest.TestCase):
         first = self.plain(embeds.day(data, 1))
         self.assertNotIn("↑", first)  # nothing to compare with
 
-    def test_day_and_member(self):
-        data = wrapped(self.new, self.old)
-        self.assertIn("day 1", embeds.day(data, 1)[0].title)
+    def test_day_not_found(self):
         with self.assertRaises(embeds.Empty):
-            embeds.day(data, 99)
+            embeds.day(wrapped(self.new, self.old), 99)
+
+    def test_member_card(self):
         built = embeds.member(wrapped(
             [m for m in self.new if m.nickname == "Bob"], self.old))
+        text = self.plain(built)
         self.assertEqual(built[0].title, "Bob · 2026-10")
-        self.assertTrue(built[0].fields)
+        self.assertRegex(text, r"1\s+Bob\s+2\s+5500\s+↑2")
+        self.assertIn("Boss 1", text)
+        self.assertIn("Lv 522", text)
+        self.assertEqual(text.count("```") % 2, 0)
+        self.assertNotIn("``````", text)
+
+    def test_member_shows_at_most_three(self):
+        data = wrapped(self.new)
+        data["members"] = data["members"] * 2
+        built = embeds.member(data)
+        self.assertEqual(len(built), 3)
+        self.assertIn("6 match", built[-1].footer.text)
 
     def test_compare_lists_leavers(self):
         data = json.loads(compare.as_json(
             compare.compare(self.old, self.new), "2026-09", "2026-10"))
         built = embeds.compare(data)
+        text = self.plain(built)
         self.assertIn("Carol (was #2)", built[-1].fields[0].value)
+        self.assertRegex(text, r"1\s+Bob\s+5500\s+↑2\s+\+2900")
+        self.assertRegex(text, r"Dave\s.*New!")
+        self.assertRegex(text, r"Alice\s.*↓2\s+-2900")
 
     def test_long_rankings_stay_within_discord_limits(self):
         data = wrapped(self.new)
@@ -122,10 +137,6 @@ class EmbedTest(unittest.TestCase):
         # every embed holds a complete code block
         self.assertTrue(all(e.description.count("```") % 2 == 0
                             for e in built))
-
-    def test_names_cannot_inject_markdown_or_mentions(self):
-        self.assertNotIn("@everyone", embeds.name("@everyone"))
-        self.assertEqual(embeds.name("a*b"), "a\\*b")
 
 
 if __name__ == "__main__":

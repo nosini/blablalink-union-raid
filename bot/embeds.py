@@ -5,7 +5,6 @@
 import discord
 
 COLOUR = discord.Colour(0xF2A900)
-MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 BODY = 4000   # an embed description holds 4096 characters
 BUDGET = 5500  # a message holds 6000 characters of embeds
 
@@ -22,52 +21,11 @@ def short(n):
     return str(n)
 
 
-def signed(n):
-    return f"{'+' if n >= 0 else '-'}{short(abs(n))}"
-
-
-def name(text):
-    return discord.utils.escape_mentions(discord.utils.escape_markdown(text))
-
-
-def place(rank):
-    return MEDALS.get(rank) or f"`{rank:>2}`"
-
-
-def move(status):
-    """A short sign for 'up 2', 'down 1', 'new'; nothing for 'same'."""
-    kind, _, count = status.partition(" ")
-    return {"up": f" 🟢▲{count}", "down": f" 🔴▼{count}",
-            "new": " 🆕"}.get(kind, "")
-
-
-def pages(title, intro, lines, footer):
-    """Embeds with the lines spread over as many as needed, within limits."""
-    kept, used = [], len(intro)
-    for line in lines:
-        if used + len(line) + 1 > BUDGET:
-            kept.append(f"…and {len(lines) - len(kept)} more")
-            break
-        kept.append(line)
-        used += len(line) + 1
-    texts, text = [], intro
-    for line in kept:
-        if len(text) + len(line) + 1 > BODY:
-            texts.append(text)
-            text = ""
-        text += ("\n" if text else "") + line
-    texts.append(text)
-    result = [discord.Embed(title=title if i == 0 else None, description=t,
-                            colour=COLOUR) for i, t in enumerate(texts)]
-    result[-1].set_footer(text=footer)
-    return result
-
-
 ESC = "\u001b"
 RESET = f"{ESC}[0m"
 COLOURS = {"green": 32, "red": 31, "yellow": 33, "blue": 34, "grey": 30}
-HEADER = ["#", "IGN", "Att", "Damage (M)", "Chg", "Remark"]
-LEFT = {1, 4, 5}
+SHEET = ["#", "IGN", "Att", "Damage (M)", "Chg", "Remark"]
+SHEET_LEFT = {1, 4, 5}
 NAME_WIDTH = 14
 
 
@@ -75,9 +33,9 @@ def paint(text, colour):
     return f"{ESC}[0;{COLOURS[colour]}m{text}{RESET}" if colour else text
 
 
-def clip(text):
+def clip(text, width=NAME_WIDTH):
     text = text.replace("`", "'")
-    return text if len(text) <= NAME_WIDTH else text[:NAME_WIDTH - 1] + "…"
+    return text if len(text) <= width else text[:width - 1] + "…"
 
 
 def change(previous, current):
@@ -91,27 +49,36 @@ def change(previous, current):
     return "-", "grey"
 
 
-def grid(title, intro, rows, footer):
-    """Rows of (cells, colours-per-cell) as monospace tables in embeds.
+def table_lines(header, left, rows):
+    """(header line, row lines) of a monospace table with coloured cells.
 
-    Colours use Discord's ansi code blocks; widths come from the plain text.
+    Each row is (cells, colours per cell); widths come from the plain text.
     """
-    cells = [HEADER] + [[str(c) for c in r[0]] for r in rows]
-    widths = [max(len(row[i]) for row in cells) for i in range(len(HEADER))]
+    cells = [header] + [[str(c) for c in r[0]] for r in rows]
+    widths = [max(len(row[i]) for row in cells) for i in range(len(header))]
 
     def line(texts, colours):
         out = []
         for i, (text, width) in enumerate(zip(texts, widths)):
-            padded = text.ljust(width) if i in LEFT else text.rjust(width)
+            padded = text.ljust(width) if i in left else text.rjust(width)
             out.append(paint(padded, colours[i] if colours else None))
         return "  ".join(out).rstrip()
-    head = line(HEADER, None)
-    body = [line(texts, r[1]) for texts, r in zip(cells[1:], rows)]
+    return line(header, None), [line(t, r[1]) for t, r in zip(cells[1:], rows)]
+
+
+def block(header, left, rows):
+    head, body = table_lines(header, left, rows)
+    return "```ansi\n" + "\n".join([head] + body) + "\n```"
+
+
+def grid(title, intro, header, left, rows, footer):
+    """The table as embeds, split into complete code blocks as needed."""
+    head, body = table_lines(header, left, rows)
     fence = len("```ansi\n\n```")
     kept, used = [], len(intro) + len(head)
     for text in body:
         if used + len(text) + 1 > BUDGET:
-            kept.append("…" + f"and {len(body) - len(kept)} more")
+            kept.append(f"…and {len(body) - len(kept)} more")
             break
         kept.append(text)
         used += len(text) + 1
@@ -125,10 +92,10 @@ def grid(title, intro, rows, footer):
     chunks.append(current)
     result = []
     for i, chunk in enumerate(chunks):
-        table = "\n".join([head] + chunk)
+        text = "\n".join([head] + chunk)
         result.append(discord.Embed(
             title=title if i == 0 else None,
-            description=(intro if i == 0 else "") + f"```ansi\n{table}\n```",
+            description=(intro if i == 0 else "") + f"```ansi\n{text}\n```",
             colour=COLOUR))
     result[-1].set_footer(text=footer)
     return result
@@ -168,7 +135,8 @@ def season(data):
     footer = f"Updated {data['ingested_at']}"
     if compared:
         footer += f" · changes against {compared}"
-    return grid(f"Union Raid · {data['season']}", intro, rows, footer)
+    return grid(f"Union Raid · {data['season']}", intro, SHEET, SHEET_LEFT,
+                rows, footer)
 
 
 def day_ranking(members, number):
@@ -214,60 +182,86 @@ def day(data, number):
                       "blue" if finishers else None]))
     total = sum(e["total"] for _, e in played)
     intro = f"**Day total** {short(total)} · {len(played)} members\n"
-    return grid(f"Union Raid · {data['season']} · day {number}", intro, rows,
-                f"Updated {data['ingested_at']}")
+    return grid(f"Union Raid · {data['season']} · day {number}", intro, SHEET,
+                SHEET_LEFT, rows, f"Updated {data['ingested_at']}")
+
+
+RUNS = ["Day", "Run", "Boss", "Damage (M)", "Remark"]
+RUNS_LEFT = {2, 4}
+MAX_RUNS = 30
 
 
 def member(data):
     members = data["members"]
     if not members:
         raise Empty("No member matches that name.")
-    embeds = []
-    for m in members[:3]:  # a message holds 6000 characters of embeds
+    compared = data["compared_with"]
+    result = []
+    for index, m in enumerate(members[:3], 1):  # 6000 characters per message
         previous = m.get("previous") or {}
-        top = f"**{short(m['total'])}** total"
-        if m.get("rank"):
-            top += f" · rank **{m['rank']}**"
-            top += move(previous.get("status", ""))
-        if m.get("level"):
-            top += f" · Lv {m['level']}"
-        embed = discord.Embed(title=f"{m['member']} · {data['season']}",
-                              description=top, colour=COLOUR)
-        for key, entry in list(m["days"].items())[:25]:
-            lines = [f"{r['run']}. {r['boss']} · {short(r['damage'])}"
-                     + (" ☠️" if r["final_hit"] else "")
-                     for r in entry["runs"]]
-            embed.add_field(
-                name=f"Day {key} · {short(entry['total'])}",
-                value="\n".join(lines) or "-", inline=False)
-        embeds.append(embed)
+        rank = m.get("rank") or index
+        if compared and previous.get("rank"):
+            sign, colour = change(previous["rank"], rank)
+        elif compared:
+            sign, colour = "New!", "yellow"
+        else:
+            sign, colour = "-", "grey"
+        attempts, finishers = counts(m)
+        summary = block(SHEET, SHEET_LEFT, [(
+            [rank, clip(m["member"]), attempts, m["total"] // 10**6, sign,
+             f"Finisher x{finishers}" if finishers else ""],
+            [None, None, None, None, colour,
+             "blue" if finishers else None])])
+        rows = [([day, r["run"], clip(r["boss"], 18), r["damage"] // 10**6,
+                  "Finisher" if r["final_hit"] else ""],
+                 [None, None, None, None, "blue" if r["final_hit"] else None])
+                for day, entry in m["days"].items() for r in entry["runs"]]
+        text = f"Lv {m['level']}\n" if m.get("level") else ""
+        text += summary
+        if rows:
+            text += "\n" + block(RUNS, RUNS_LEFT, rows[:MAX_RUNS])
+        if len(rows) > MAX_RUNS:
+            text += f"\n…and {len(rows) - MAX_RUNS} more runs"
+        result.append(discord.Embed(
+            title=f"{m['member']} · {data['season']}", description=text,
+            colour=COLOUR))
     footer = f"Updated {data['ingested_at']}"
     if len(members) > 3:
         footer += f" · {len(members)} match, showing 3: be more specific"
-    embeds[-1].set_footer(text=footer)
-    return embeds
+    result[-1].set_footer(text=footer)
+    return result
+
+
+COMPARE = ["#", "IGN", "Damage (M)", "Chg", "Change (M)", "Remark"]
+COMPARE_LEFT = {1, 3, 5}
 
 
 def compare(data):
-    members = data["members"]
-    lines, gone = [], []
-    for m in members:
+    rows, gone = [], []
+    for m in data["members"]:
         if m["rank"] is None:
-            gone.append(f"{name(m['member'])} (was #{m['prev_rank']})")
+            gone.append(f"{discord.utils.escape_markdown(m['member'])} "
+                        f"(was #{m['prev_rank']})")
             continue
-        line = f"{place(m['rank'])} **{name(m['member'])}** · " \
-               f"{short(m['total'])}{move(m['status'])}"
         if m["prev_rank"]:
-            line += f" ({signed(m['delta'])})"
-            if m["level_change"]:
-                line += f" · Lv {m['level']} (+{m['level_change']})"
-        lines.append(line)
-    if not lines:
+            sign, colour = change(m["prev_rank"], m["rank"])
+            delta = f"{m['delta'] // 10**6:+}"
+        else:
+            sign, colour, delta = "New!", "yellow", ""
+        gain = m["level_change"]
+        remark = f"Lv {m['level']}" + (f" ({gain:+})" if gain else "") \
+            if m["level"] else ""
+        rows.append(([m["rank"], clip(m["member"]), m["total"] // 10**6, sign,
+                      delta, remark],
+                     [None, None, None, colour,
+                      "green" if delta.startswith("+") else
+                      "red" if delta.startswith("-") else None, None]))
+    if not rows:
         raise Empty("Neither season has runs.")
-    intro = f"**{short(sum(m['total'] for m in members))}** union total\n"
-    footer = "Damage change is against the earlier season"
-    result = pages(f"Union Raid · {data['from']} → {data['to']}", intro,
-                   lines, footer)
+    total = sum(m["total"] for m in data["members"])
+    result = grid(f"Union Raid · {data['from']} → {data['to']}",
+                  f"**Union total** {short(total)}\n", COMPARE, COMPARE_LEFT,
+                  rows, "Change is against the earlier season")
     if gone:
         result[-1].add_field(name="No runs this season",
                              value=", ".join(gone)[:1000], inline=False)
