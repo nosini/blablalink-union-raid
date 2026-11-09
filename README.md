@@ -190,6 +190,44 @@ the new data has no runs (`push` then says so and sends nothing, and the
 server refuses it too) or less than half the stored runs (`push --force`
 overrides that).
 
+### Write token from OpenBao (optional)
+
+Instead of `RAID_WRITE_TOKEN`, `push` and `remove` can read the token from
+OpenBao: set `BLABLALINK_UNION_RAID=openbao` (underscores: a shell can't
+export a hyphenated name, though `env 'BLABLALINK-UNION-RAID=openbao' …` is
+accepted too). It then wins over `RAID_WRITE_TOKEN`. Without the variable
+nothing changes.
+
+The token is the key `RAID_WRITE_TOKEN` of a KV secret on the `kv` mount;
+its path comes from `BLABLALINK_UNION_RAID_OPENBAO_PATH` (for example
+`apps/union-raid/production`) and has no default. The login is the homelab deployments' one:
+Pocket ID through the OIDC role `deploy` (read-only `deploy-read` policy),
+cached for up to eight hours, done by that repository's
+`scripts/openbao-session`. That code is not copied here. Either run under it:
+
+```sh
+export BLABLALINK_UNION_RAID_OPENBAO_PATH=apps/union-raid/production
+BLABLALINK_UNION_RAID=openbao ~/Git/homelab-infra/scripts/openbao-session -- \
+  blablalink-union-raid push --url https://raid.example.org --cookies-from-browser brave --season-id 1000046
+```
+
+or set `BLABLALINK_UNION_RAID_OPENBAO_SESSION` to the helper's path, and the
+tool starts itself under it when there is no session:
+
+```sh
+export BLABLALINK_UNION_RAID=openbao
+export BLABLALINK_UNION_RAID_OPENBAO_PATH=apps/union-raid/production
+export BLABLALINK_UNION_RAID_OPENBAO_SESSION=~/Git/homelab-infra/scripts/openbao-session
+blablalink-union-raid push --url https://raid.example.org --cookies-from-browser brave --season-id 1000046
+```
+
+The first run opens the browser for the login; later runs reuse it. It only
+reads `BAO_ADDR` (https only, no redirects or proxies) and `BAO_TOKEN`, which
+the helper sets, and honours `BAO_CACERT`. Errors never print what OpenBao
+answered. Store the token once with, for example,
+`bao kv put -mount=kv apps/union-raid/production RAID_WRITE_TOKEN=…`
+(adding keys to an existing secret needs `kv patch`, or `put` with all keys).
+
 On the PC, run this from a timer or cron (it re-sends the running season,
 replacing the stored copy):
 

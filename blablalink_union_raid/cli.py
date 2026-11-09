@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 
 from . import compare as comparison
-from . import report
+from . import openbao, report
 from .api import ApiError, Client
 from .history import HistoryError, Store
 from .model import DataError, parse
@@ -80,14 +80,24 @@ def season_name(season_id):
     return None
 
 
-def send(url, method, name, data=None, force=False):
+def write_token():
+    """RAID_WRITE_TOKEN, or the OpenBao secret when BLABLALINK_UNION_RAID=
+    openbao is set."""
+    try:
+        if openbao.selected():
+            return clean_token(openbao.write_token())
+    except openbao.OpenBaoError as exc:
+        raise SystemExit(f"error: {exc}")
+    return clean_token(os.environ.get("RAID_WRITE_TOKEN"))
+
+
+def send(url, method, name, token, data=None, force=False):
     """Call the server's /seasons/<name> with the write token."""
     request = urllib.request.Request(
         f"{url.rstrip('/')}/seasons/{urllib.parse.quote(name)}"
         + ("?force=1" if force else ""),
         method=method, data=data,
-        headers={"Authorization": "Bearer "
-                 + clean_token(os.environ.get("RAID_WRITE_TOKEN")),
+        headers={"Authorization": f"Bearer {token}",
                  "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
@@ -104,7 +114,7 @@ def cmd_push(args):
     if not name:
         raise SystemExit("error: give --season (a past season's name is "
                          "taken from its --season-id, e.g. S46)")
-    clean_token(os.environ.get("RAID_WRITE_TOKEN"))  # before any fetching
+    token = write_token()  # before any fetching: a login may open a browser
     client = Client(args.cookies, browser=args.cookies_from_browser)
     if args.season_id:
         result = client.past_season(args.guild_id, args.area_id, args.season_id)
@@ -114,11 +124,12 @@ def cmd_push(args):
         # Expected between seasons; a timer should not fail for it.
         print(f"no runs yet for {name}; nothing pushed")
         return
-    send(args.url, "PUT", name, json.dumps(result).encode(), args.force)
+    send(args.url, "PUT", name, token, json.dumps(result).encode(),
+         args.force)
 
 
 def cmd_remove(args):
-    send(args.url, "DELETE", args.season)
+    send(args.url, "DELETE", args.season, write_token())
 
 
 def stored_seasons(args):
