@@ -181,6 +181,70 @@ def season(data):
                  f"{previous} day {number}" if before else "")
 
 
+HISTORY = ["Season", "#", "Att", "Dmg (M)", "Chg", "Remark"]
+HISTORY_LEFT = {0, 4, 5}
+SEASONS_SHOWN = 12
+
+
+def history(data, name):
+    """One member's final-day result in each season, newest first.
+
+    The member is found by name, ignoring case; the rank is the one the
+    season sheet shows for the season's last day, and the change is against
+    the season stored just before.
+    """
+    wanted = name.strip().casefold()
+    results, before, taken_part = [], None, False
+    for season in data["seasons"]:
+        members = season["members"]
+        number = last_day(members)
+        played, full = day_ranking(members, number) if number else ([], 0)
+        in_season = any(m["member"].strip().casefold() == wanted
+                        for m in members)
+        taken_part = taken_part or in_season
+        hit = next(((rank, entry) for rank, (m, entry)
+                    in enumerate(played, 1)
+                    if m["member"].strip().casefold() == wanted), None)
+        if in_season:
+            attempts, finishers = counts(hit[1]) if hit else (0, 0)
+            results.append({
+                "season": season["name"], "full": full,
+                "rank": hit[0] if hit else None, "attempts": attempts,
+                "damage": hit[1]["total"] if hit else 0,
+                "finishers": finishers, "before": before})
+        before = hit[0] if hit else None
+    if not taken_part:
+        raise Empty(f"No Union Raid member named {name.strip()!r} found. Set "
+                    "your server nickname to your in-game name and try again.")
+    rows = []
+    for r in reversed(results):
+        if r["rank"] is None:
+            sign, colour = "-", "grey"
+        elif r["before"] is None:
+            sign, colour = "-", "grey"
+        else:
+            sign, colour = change(r["before"], r["rank"])
+        missed = r["attempts"] < r["full"]
+        rows.append((
+            [r["season"], r["rank"] or "-", f"{r['attempts']}/{r['full']}",
+             r["damage"] // 10**6, sign,
+             f"Finisher x{r['finishers']}" if r["finishers"] else
+             "No runs" if r["rank"] is None else ""],
+            [None, None, "red" if missed else None, None, colour,
+             "blue" if r["finishers"] else "red" if r["rank"] is None
+             else None]))
+    ranked = [r for r in results if r["rank"]]
+    intro = f"**{len(results)} seasons**"
+    if ranked:
+        best = min(ranked, key=lambda r: r["rank"])
+        average = sum(r["rank"] for r in ranked) / len(ranked)
+        intro += (f" · best rank {best['rank']} ({best['season']})"
+                  f" · average {average:.1f}")
+    return grid(f"{clip(name.strip(), 32)} · Union Raid history", intro + "\n",
+                HISTORY, HISTORY_LEFT, rows[:SEASONS_SHOWN],
+                "Rank on each season's final day · matched on your nickname")
+
+
 RUNS = ["Day", "Run", "Boss", "Dmg (M)", "Remark"]
 RUNS_LEFT = {2, 4}
 MAX_RUNS = 30

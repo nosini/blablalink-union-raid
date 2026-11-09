@@ -89,6 +89,19 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.call(
             "GET", "/report?format=json", None)[0], 401)
 
+    def test_history_for_the_bot(self):
+        self.put("S45", "season.json")
+        self.put("S46", "season2.json")
+        status, text = self.call("GET", "/history", "r-token")
+        self.assertEqual(status, 200)
+        seasons = json.loads(text)["seasons"]
+        self.assertEqual([s["name"] for s in seasons], ["S45", "S46"])
+        alice = {m["member"]: m for m in seasons[0]["members"]}["Alice"]
+        self.assertEqual(alice["days"]["1"]["total"], 2_900_000_000)
+        self.assertNotIn("squad", text)
+        self.assertEqual(self.call("GET", "/history", "w-token")[0], 401)
+        self.assertEqual(self.call("GET", "/history", None)[0], 401)
+
     def test_empty_data_is_never_stored(self):
         empty = json.dumps({"GetUnionRaidData": {
             "code": 0, "data": {"participate_data": []}}}).encode()

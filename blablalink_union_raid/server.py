@@ -13,6 +13,7 @@ exposure are the reverse proxy's job; this listens on plain HTTP.
     GET /seasons             one line per stored season
     GET /report?season=&day=&member=
     GET /compare?from=&to=
+    GET /history             every season's runs per member, as JSON only
 
 The GET endpoints answer with a text table, or with JSON for ?format=json
 (the Discord bot's input).
@@ -120,11 +121,11 @@ def make_handler(store, lock, write_token, read_token):
         def do_GET(self):
             url = urlsplit(self.path)
             query = {k: v[0] for k, v in parse_qs(url.query).items()}
-            if url.path not in ("/seasons", "/report", "/compare"):
+            if url.path not in ("/seasons", "/report", "/compare", "/history"):
                 return self.reply(404, "not found\n")
             if not self.authorized(read_token):
                 return
-            as_json = query.get("format") == "json"
+            as_json = query.get("format") == "json" or url.path == "/history"
             try:
                 with lock:
                     text = (self.read_json if as_json else self.read)(
@@ -158,6 +159,10 @@ def make_handler(store, lock, write_token, read_token):
                                                 store.load(new))
 
         def read_json(self, path, query):
+            if path == "/history":
+                return json.dumps({"seasons": [
+                    {"name": n, "ingested_at": w, "members": brief(
+                        store.load(n))} for n, w, _, _ in store.seasons()]})
             if path == "/seasons":
                 return json.dumps([
                     {"name": n, "ingested_at": w, "members": m, "total": t}

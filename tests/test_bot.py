@@ -11,6 +11,7 @@ import unittest
 from blablalink_union_raid import compare, report
 from blablalink_union_raid.cli import load
 from blablalink_union_raid.model import parse
+from blablalink_union_raid.server import brief
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
 try:
@@ -158,6 +159,53 @@ class EmbedTest(unittest.TestCase):
         # every embed holds a complete code block
         self.assertTrue(all(e.description.count("```") % 2 == 0
                             for e in built))
+
+
+@unittest.skipUnless(embeds, "discord.py is not installed")
+class HistoryTest(unittest.TestCase):
+    def setUp(self):
+        old = parse(load(FIXTURES / "season.json"))
+        new = parse(load(FIXTURES / "season2.json"))
+        self.data = {"seasons": [
+            {"name": "S45", "ingested_at": "t", "members": brief(old)},
+            {"name": "S46", "ingested_at": "t", "members": brief(new)}]}
+
+    def plain(self, built):
+        return re.sub("\x1b\\[[0-9;]*m", "", "\n".join(
+            e.description or "" for e in built))
+
+    def test_shows_each_season_newest_first(self):
+        built = embeds.history(self.data, "Bob")
+        text = self.plain(built)
+        self.assertIn("Bob · Union Raid history", built[0].title)
+        table = text.split("```ansi")[1]
+        self.assertLess(table.index("S46"), table.index("S45"))
+        # S45 day 2: Bob 2100 was 1st; S46 day 2: Bob 2500 is 1st
+        self.assertRegex(text, r"S46\s+1\s+1/1\s+2500\s+-")
+        self.assertRegex(text, r"S45\s+1\s+2/2\s+2100")
+        self.assertIn("2 seasons", text)
+
+    def test_name_is_matched_ignoring_case_and_spaces(self):
+        self.assertIn("S46", self.plain(embeds.history(self.data, "  bOb ")))
+
+    def test_member_new_this_season_has_no_change(self):
+        text = self.plain(embeds.history(self.data, "Dave"))
+        self.assertNotIn("S45", text)
+        self.assertRegex(text, r"S46\s+2\s+1/1\s+500\s+-")
+
+    def test_member_who_missed_the_final_day(self):
+        text = self.plain(embeds.history(self.data, "Alice"))
+        self.assertRegex(text, r"S46\s+-\s+0/1\s+0\s+-\s+No runs")
+
+    def test_unknown_name_explains_what_to_do(self):
+        with self.assertRaises(embeds.Empty) as raised:
+            embeds.history(self.data, "Nobody")
+        self.assertIn("server nickname", str(raised.exception))
+
+    def test_only_the_caller_s_row_is_shown(self):
+        text = self.plain(embeds.history(self.data, "Bob"))
+        for other in ("Alice", "Carol", "Dave"):
+            self.assertNotIn(other, text)
 
 
 if __name__ == "__main__":

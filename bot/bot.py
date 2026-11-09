@@ -51,8 +51,8 @@ async def fetch(path, **params):
     raise embeds.Empty(text[:500])
 
 
-async def show(interaction, build, path, **params):
-    await interaction.response.defer(thinking=True)
+async def show(interaction, build, path, ephemeral=False, **params):
+    await interaction.response.defer(thinking=True, ephemeral=ephemeral)
     try:
         await interaction.followup.send(
             embeds=build(await fetch(path, **params)))
@@ -114,6 +114,15 @@ async def compare(interaction: discord.Interaction, old: str | None = None,
                   new: str | None = None):
     await show(interaction, embeds.compare, "/compare",
                **{"from": old, "to": new})
+
+
+@raid.command(description="Your own results over the seasons "
+              "(uses your server nickname as your IGN)")
+async def me(interaction: discord.Interaction):
+    name = interaction.user.display_name
+    # Only visible to the caller: it is personal and would clutter the channel.
+    await show(interaction, lambda data: embeds.history(data, name),
+               "/history", ephemeral=True)
 
 
 bot.tree.add_command(raid)
