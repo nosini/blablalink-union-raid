@@ -146,6 +146,27 @@ class HistoryCli(unittest.TestCase):
         self.assertIn("2026-09 -> 2026-10", text)
         self.assertIn("up 2", text)
 
+    def test_report_from_the_database(self):
+        self.ingest("2026-09", "season.json")
+        self.ingest("2026-10", "season2.json")
+        latest = self.run_cli("report", "--db", self.db)
+        self.assertIn("Dave", latest)
+        self.assertNotIn("Carol", latest)
+        old = self.run_cli("report", "--season", "2026-09", "--db", self.db,
+                           "--format", "runs-csv", "--member", "carol")
+        self.assertEqual(len(old.splitlines()), 1 + 1)
+        self.assertIn("Day 2", self.run_cli("report", "--db", self.db, "--day", "2"))
+
+    def test_report_database_errors(self):
+        with self.assertRaisesRegex(SystemExit, "no seasons stored"):
+            self.run_cli("report", "--db", self.db)
+        self.ingest("a", "season.json")
+        with self.assertRaisesRegex(SystemExit, "no season named 'x'"):
+            self.run_cli("report", "--season", "x", "--db", self.db)
+        with self.assertRaisesRegex(SystemExit, "not both"):
+            self.run_cli("report", str(FIXTURES / "season.json"),
+                         "--season", "a", "--db", self.db)
+
     def test_half_a_range_is_an_error(self):
         self.ingest("a", "season.json")
         self.ingest("b", "season2.json")

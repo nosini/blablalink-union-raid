@@ -83,6 +83,9 @@ Alice      3    1  down 2  1,000,000,000  3,900,000,000  -2,900,000,000
 Carol      -    2  absent              -  3,000,000,000
 ```
 
+- `report` reads a stored season too, without the JSON file:
+  `report --season 2026-10`, or just `report` for the latest one. All its
+  options (`--day`, `--member`, `--format`) work the same.
 - Rank is by total damage in the season, highest first. Members are matched
   by openid, so a renamed member keeps their history and shows the new name.
 - `new`: wasn't in the older season. `absent`: has no runs in the newer one.

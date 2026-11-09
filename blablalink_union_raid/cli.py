@@ -48,8 +48,25 @@ def cmd_fetch(args):
         print(text)
 
 
+def stored_season(args):
+    store = Store(args.db)
+    try:
+        names = store.names()
+        name = args.season or (names[-1] if names else None)
+        if name is None:
+            raise HistoryError("no seasons stored yet; use `ingest`")
+        return store.load(name)
+    finally:
+        store.close()
+
+
 def cmd_report(args):
-    members = parse(load(args.input), args.lang)
+    if args.input and args.season:
+        raise SystemExit("error: give a file or --season, not both")
+    if args.input:
+        members = parse(load(args.input), args.lang)
+    else:
+        members = stored_season(args)
     if args.member:
         wanted = args.member.casefold()
         members = [m for m in members if wanted in m.nickname.casefold()
@@ -122,18 +139,23 @@ def build_parser():
     fetch.add_argument("-o", "--output", help="write JSON here, not to stdout")
     fetch.set_defaults(func=cmd_fetch)
 
-    rep = sub.add_parser("report", help="print damage per member and run")
-    rep.add_argument("input", help="JSON written by `fetch`, or a response "
-                     "saved from the browser's network tab")
-    rep.add_argument("--format", choices=FORMATS, default="table")
-    rep.add_argument("--day", type=int, help="only this day (1-based)")
-    rep.add_argument("--member", help="only members matching this name/openid")
-    rep.add_argument("--lang", default="en", help="boss name language")
-    rep.set_defaults(func=cmd_report)
-
     db = argparse.ArgumentParser(add_help=False)
     db.add_argument("--db", help="history database (default: "
                     "~/.local/share/blablalink-union-raid/history.sqlite3)")
+
+    rep = sub.add_parser(
+        "report", parents=[db], help="print damage per member and run")
+    rep.add_argument("input", nargs="?", help="JSON written by `fetch`, or a "
+                     "response saved from the browser's network tab; omit to "
+                     "use a stored season")
+    rep.add_argument("--season", help="a stored season (default: the latest)")
+    rep.add_argument("--format", choices=FORMATS, default="table")
+    rep.add_argument("--day", type=int, help="only this day (1-based)")
+    rep.add_argument("--member", help="only members matching this name/openid")
+    rep.add_argument("--lang", default="en",
+                     help="boss name language, for files; stored seasons keep "
+                     "the language they were ingested with")
+    rep.set_defaults(func=cmd_report)
 
     ingest = sub.add_parser(
         "ingest", parents=[db],
