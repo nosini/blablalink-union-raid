@@ -10,6 +10,9 @@ exposure are the reverse proxy's job; this listens on plain HTTP.
     GET /seasons             one line per stored season
     GET /report?season=&day=&member=
     GET /compare?from=&to=
+
+The GET endpoints answer with a text table, or with JSON for ?format=json
+(the Discord bot's input).
 """
 
 import hmac
@@ -88,12 +91,58 @@ def make_handler(store, lock, write_token, read_token):
                 return self.reply(404, "not found\n")
             if not self.authorized(read_token):
                 return
+            as_json = query.get("format") == "json"
             try:
                 with lock:
-                    text = self.read(url.path, query)
+                    text = (self.read_json if as_json else self.read)(
+                        url.path, query)
             except (HistoryError, ValueError) as exc:
                 return self.reply(404, f"{exc}\n")
-            self.reply(200, text + "\n")
+            self.reply(200, text + "\n",
+                       "application/json" if as_json else "text/plain")
+
+        def selected(self, query):
+            """(name, members, previous name, previous members or None)."""
+            names = store.names()
+            if not names:
+                raise HistoryError("no seasons stored yet")
+            name = query.get("season") or names[-1]
+            members = store.load(name)
+            before = names.index(name) - 1
+            if before < 0:
+                return name, members, "", None
+            return name, members, names[before], store.load(names[before])
+
+        def pair(self, query):
+            names = store.names()
+            if query.get("from") and query.get("to"):
+                old, new = query["from"], query["to"]
+            elif len(names) >= 2:
+                old, new = names[-2:]
+            else:
+                raise HistoryError("need at least two stored seasons")
+            return old, new, comparison.compare(store.load(old),
+                                                store.load(new))
+
+        def read_json(self, path, query):
+            if path == "/seasons":
+                return json.dumps([
+                    {"name": n, "ingested_at": w, "members": m, "total": t}
+                    for n, w, m, t in store.seasons()])
+            if path == "/compare":
+                old, new, changes = self.pair(query)
+                return comparison.as_json(changes, old, new)
+            name, members, before, previous = self.selected(query)
+            wanted = (query.get("member") or "").casefold()
+            only = {m.openid for m in members
+                    if wanted in m.nickname.casefold()} if wanted else None
+            day = int(query["day"]) if query.get("day") else None
+            when = next(w for n, w, _, _ in store.seasons() if n == name)
+            return json.dumps({
+                "season": name, "ingested_at": when,
+                "compared_with": before if previous else None,
+                "members": json.loads(report.as_json(
+                    members, day, previous, before, only))})
 
         def read(self, path, query):
             names = store.names()

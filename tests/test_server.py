@@ -65,6 +65,27 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(
             self.call("GET", "/report?season=nope", "r-token")[0], 404)
 
+    def test_json_for_the_bot(self):
+        self.put("2026-09", "season.json")
+        self.put("2026-10", "season2.json")
+        status, text = self.call("GET", "/seasons?format=json", "r-token")
+        self.assertEqual([s["name"] for s in json.loads(text)],
+                         ["2026-09", "2026-10"])
+        report = json.loads(self.call(
+            "GET", "/report?format=json&member=bob", "r-token")[1])
+        self.assertEqual(report["season"], "2026-10")
+        self.assertEqual(report["compared_with"], "2026-09")
+        self.assertEqual([m["member"] for m in report["members"]], ["Bob"])
+        self.assertEqual(report["members"][0]["previous"]["status"], "up 2")
+        changes = json.loads(self.call(
+            "GET", "/compare?format=json", "r-token")[1])
+        self.assertEqual((changes["from"], changes["to"]),
+                         ("2026-09", "2026-10"))
+        self.assertEqual(self.call(
+            "GET", "/report?format=json&season=nope", "r-token")[0], 404)
+        self.assertEqual(self.call(
+            "GET", "/report?format=json", None)[0], 401)
+
     def test_rejects_junk(self):
         self.assertEqual(self.call("PUT", "/seasons/x", "w-token", b"{}")[0], 400)
         self.assertEqual(self.call("PUT", "/seasons/x", "w-token", b"no")[0], 400)
