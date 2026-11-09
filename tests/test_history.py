@@ -87,11 +87,14 @@ class StoreTests(unittest.TestCase):
     def test_extra_run_fields_roundtrip(self):
         store = Store(self.path)
         store.save("s1", parse(OLD))
-        run = store.load("s1")[0].runs[0]            # Alice's first run
-        self.assertEqual((run.element_id, run.icon_id, run.monster_model_id),
-                         (1, 2001, 5001))
-        self.assertEqual(run.squad[0]["lv"], 200)
-        self.assertEqual(run.squad[0]["tid"], 1001)
+        alice = store.load("s1")[0]
+        run = alice.runs[0]                          # her first run
+        self.assertEqual((run.elements, run.boss_icon, run.monster_model_id),
+                         ([500001], "bbg001_boss_intercept", 152041))
+        self.assertEqual(run.boss_id, 1520040151)
+        self.assertEqual([c["slot"] for c in run.squad], [1, 2, 3, 4, 5])
+        self.assertEqual((run.squad[0]["lv"], run.squad[0]["tid"]), (528, 301001))
+        self.assertEqual(alice.level, 528)
 
     def test_old_database_is_migrated(self):
         self.path.parent.mkdir(parents=True)
@@ -112,10 +115,21 @@ class StoreTests(unittest.TestCase):
         db.close()
         store = Store(self.path)                     # opens and migrates
         (run,) = store.load("old")[0].runs
-        self.assertEqual((run.damage, run.element_id, run.squad), (123, 0, []))
+        self.assertEqual((run.damage, run.elements, run.squad), (123, [], []))
         store.save("old", parse(OLD))                # re-ingest fills the data
-        self.assertEqual(store.load("old")[0].runs[0].icon_id, 2001)
+        self.assertEqual(store.load("old")[0].runs[0].boss_icon,
+                         "bbg001_boss_intercept")
         Store(self.path)                             # opening again is fine
+
+    def test_intermediate_columns_are_dropped(self):
+        store = Store(self.path)
+        store.db.execute("ALTER TABLE runs ADD COLUMN element_id INTEGER DEFAULT 0")
+        store.db.execute("ALTER TABLE runs ADD COLUMN icon_id INTEGER DEFAULT 0")
+        store.db.commit()
+        store.close()
+        columns = {r[1] for r in Store(self.path).db.execute("PRAGMA table_info(runs)")}
+        self.assertFalse({"element_id", "icon_id"} & columns)
+        self.assertTrue({"elements", "boss_icon", "squad"} <= columns)
 
     def test_resave_replaces_and_keeps_place(self):
         store = Store(self.path)
@@ -185,6 +199,8 @@ class HistoryCli(unittest.TestCase):
         self.ingest("2026-10", "season2.json")
         latest = self.run_cli("report", "--db", self.db)
         self.assertIn("Dave", latest)
+        self.assertRegex(latest, r"#\s+Member\s+Lv\s+D1")
+        self.assertRegex(latest, r"1\s+Bob\s+522\s")
         self.assertIn("compared with 2026-09", latest)
         self.assertIn("No runs this season: Carol (was #2)", latest)
         old = self.run_cli("report", "--season", "2026-09", "--db", self.db,

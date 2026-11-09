@@ -47,6 +47,25 @@ class Model(unittest.TestCase):
         with self.assertRaises(DataError):
             parse([])
 
+    def test_real_field_shapes(self):
+        # element_id is a list and icon_id a name, both as strings
+        (m,) = parse({"participate_data": [{
+            "openid": "x", "day": 0, "boss_id": "1520040154", "level": 9,
+            "element_id": ["500001"], "icon_id": "bbg004_dmtr_intercept",
+            "monster_model_id": "152044", "total_damage": "1118659860",
+            "squad": [{"combat": 244317, "costume_id": 0, "lv": 528, "slot": 1,
+                       "tid": 328103}]}]})
+        run = m.runs[0]
+        self.assertEqual((run.boss_id, run.elements, run.boss_icon,
+                          run.monster_model_id, run.level, run.damage),
+                         (1520040154, [500001], "bbg004_dmtr_intercept",
+                          152044, 9, 1_118_659_860))
+        self.assertEqual(m.level, 528)
+
+    def test_level_unknown_without_squad(self):
+        (m,) = parse({"participate_data": [{"openid": "x", "day": 0}]})
+        self.assertEqual(m.level, 0)
+
     def test_tolerates_missing_and_odd_fields(self):
         members = parse({"participate_data": [
             {"openid": "x", "day": 0, "total_damage": None},
@@ -67,14 +86,15 @@ class Reports(unittest.TestCase):
     def test_summary_csv_has_day_and_member_totals(self):
         rows = [l.split(",") for l in report.summary_csv(self.members).splitlines()]
         self.assertEqual(rows[0], ["openid", "member", "day", "run1", "run2",
-                                   "run3", "day_total", "member_total"])
+                                   "run3", "day_total", "member_total", "level"])
         alice_day1 = next(r for r in rows if r[1] == "Alice" and r[2] == "1")
         self.assertEqual(alice_day1[3:], ["900000000", "1200000000", "800000000",
-                                          "2900000000", "3900000000"])
+                                          "2900000000", "3900000000", "528"])
 
     def test_table_mentions_everyone_and_totals(self):
         text = report.table(self.members)
-        for expected in ("Day 1", "Day 2", "Season total", "Alice", "3,900,000,000"):
+        for expected in ("Day 1", "Day 2", "Season total", "Alice",
+                         "3,900,000,000", "Lv", "528"):
             self.assertIn(expected, text)
 
     def test_day_table_is_sorted_by_that_days_damage(self):
@@ -91,13 +111,18 @@ class Reports(unittest.TestCase):
         rows = list(__import__("csv").DictReader(
             io.StringIO(report.runs_csv(self.members))))
         first = next(r for r in rows if r["member"] == "Alice")
-        self.assertEqual(first["monster_model_id"], "5001")
-        self.assertEqual(json.loads(first["squad"])[0]["lv"], 200)
+        self.assertEqual(first["monster_model_id"], "152041")
+        self.assertEqual(first["elements"], "500001")
+        self.assertEqual(first["boss_icon"], "bbg001_boss_intercept")
+        self.assertEqual(json.loads(first["squad"])[0]["lv"], 528)
 
     def test_json_has_squad_and_icon(self):
         alice = json.loads(report.as_json(self.members))[0]
-        self.assertEqual(alice["icon_id"], 2001)
-        self.assertEqual(alice["days"]["1"]["runs"][0]["squad"][0]["tid"], 1001)
+        self.assertEqual(alice["level"], 528)
+        run = alice["days"]["1"]["runs"][0]
+        self.assertEqual(run["squad"][0]["tid"], 301001)
+        self.assertEqual((run["elements"], run["boss_icon"]),
+                         ([500001], "bbg001_boss_intercept"))
 
     def test_json(self):
         data = json.loads(report.as_json(self.members))

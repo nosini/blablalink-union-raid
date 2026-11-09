@@ -7,209 +7,457 @@
     "openid": "o1",
     "nickname": "Alice",
     "day": 0,
-    "boss_id": 1,
+    "boss_id": "1520040151",
     "step": 1,
     "difficulty": 1,
     "level": 1,
     "total_damage": "900000000",
     "is_final_hit": false,
-    "element_id": 1,
+    "element_id": [
+     "500001"
+    ],
     "name_localvalues": {
      "en": "Boss 1",
      "ja": "\u30dc\u30b91"
     },
     "squad": [
      {
-      "tid": 1001,
+      "combat": 240001,
       "costume_id": 0,
-      "lv": 200,
-      "combat": 100000
+      "lv": 528,
+      "slot": 1,
+      "tid": 301001
+     },
+     {
+      "combat": 240002,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 2,
+      "tid": 302001
+     },
+     {
+      "combat": 240003,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 3,
+      "tid": 303001
+     },
+     {
+      "combat": 240004,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 4,
+      "tid": 304001
+     },
+     {
+      "combat": 240005,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 5,
+      "tid": 305001
      }
     ],
-    "icon_id": 2001,
-    "monster_model_id": 5001
+    "icon_id": "bbg001_boss_intercept",
+    "monster_model_id": "152041"
    },
    {
     "openid": "o1",
     "nickname": "Alice",
     "day": 0,
-    "boss_id": 2,
+    "boss_id": "1520040152",
     "step": 2,
     "difficulty": 1,
     "level": 1,
     "total_damage": "1200000000",
     "is_final_hit": false,
-    "element_id": 1,
+    "element_id": [
+     "500002"
+    ],
     "name_localvalues": {
      "en": "Boss 2",
      "ja": "\u30dc\u30b92"
     },
     "squad": [
      {
-      "tid": 1002,
+      "combat": 240001,
       "costume_id": 0,
-      "lv": 200,
-      "combat": 100000
+      "lv": 528,
+      "slot": 1,
+      "tid": 301002
+     },
+     {
+      "combat": 240002,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 2,
+      "tid": 302002
+     },
+     {
+      "combat": 240003,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 3,
+      "tid": 303002
+     },
+     {
+      "combat": 240004,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 4,
+      "tid": 304002
+     },
+     {
+      "combat": 240005,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 5,
+      "tid": 305002
      }
     ],
-    "icon_id": 2001,
-    "monster_model_id": 5002
+    "icon_id": "bbg002_boss_intercept",
+    "monster_model_id": "152042"
    },
    {
     "openid": "o1",
     "nickname": "Alice",
     "day": 0,
-    "boss_id": 3,
+    "boss_id": "1520040153",
     "step": 3,
     "difficulty": 1,
     "level": 1,
     "total_damage": "800000000",
     "is_final_hit": true,
-    "element_id": 1,
+    "element_id": [
+     "500003"
+    ],
     "name_localvalues": {
      "en": "Boss 3",
      "ja": "\u30dc\u30b93"
     },
     "squad": [
      {
-      "tid": 1003,
+      "combat": 240001,
       "costume_id": 0,
-      "lv": 200,
-      "combat": 100000
+      "lv": 528,
+      "slot": 1,
+      "tid": 301003
+     },
+     {
+      "combat": 240002,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 2,
+      "tid": 302003
+     },
+     {
+      "combat": 240003,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 3,
+      "tid": 303003
+     },
+     {
+      "combat": 240004,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 4,
+      "tid": 304003
+     },
+     {
+      "combat": 240005,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 5,
+      "tid": 305003
      }
     ],
-    "icon_id": 2001,
-    "monster_model_id": 5003
+    "icon_id": "bbg003_boss_intercept",
+    "monster_model_id": "152043"
    },
    {
     "openid": "o1",
     "nickname": "Alice",
     "day": 1,
-    "boss_id": 1,
+    "boss_id": "1520040151",
     "step": 1,
     "difficulty": 1,
     "level": 1,
     "total_damage": "1000000000",
     "is_final_hit": false,
-    "element_id": 1,
+    "element_id": [
+     "500001"
+    ],
     "name_localvalues": {
      "en": "Boss 1",
      "ja": "\u30dc\u30b91"
     },
     "squad": [
      {
-      "tid": 1001,
+      "combat": 240001,
       "costume_id": 0,
-      "lv": 200,
-      "combat": 100000
+      "lv": 528,
+      "slot": 1,
+      "tid": 301001
+     },
+     {
+      "combat": 240002,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 2,
+      "tid": 302001
+     },
+     {
+      "combat": 240003,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 3,
+      "tid": 303001
+     },
+     {
+      "combat": 240004,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 4,
+      "tid": 304001
+     },
+     {
+      "combat": 240005,
+      "costume_id": 0,
+      "lv": 528,
+      "slot": 5,
+      "tid": 305001
      }
     ],
-    "icon_id": 2001,
-    "monster_model_id": 5001
+    "icon_id": "bbg001_boss_intercept",
+    "monster_model_id": "152041"
    },
    {
     "openid": "o2",
     "nickname": "Bob",
     "day": 0,
-    "boss_id": 1,
+    "boss_id": "1520040151",
     "step": 1,
     "difficulty": 1,
     "level": 1,
     "total_damage": "500000000",
     "is_final_hit": false,
-    "element_id": 1,
+    "element_id": [
+     "500001"
+    ],
     "name_localvalues": {
      "en": "Boss 1",
      "ja": "\u30dc\u30b91"
     },
     "squad": [
      {
-      "tid": 1001,
+      "combat": 240001,
       "costume_id": 0,
-      "lv": 200,
-      "combat": 100000
+      "lv": 520,
+      "slot": 1,
+      "tid": 301001
+     },
+     {
+      "combat": 240002,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 2,
+      "tid": 302001
+     },
+     {
+      "combat": 240003,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 3,
+      "tid": 303001
+     },
+     {
+      "combat": 240004,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 4,
+      "tid": 304001
+     },
+     {
+      "combat": 240005,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 5,
+      "tid": 305001
      }
     ],
-    "icon_id": 2002,
-    "monster_model_id": 5001
+    "icon_id": "bbg001_boss_intercept",
+    "monster_model_id": "152041"
    },
    {
     "openid": "o2",
     "nickname": "Bob",
     "day": 1,
-    "boss_id": 2,
+    "boss_id": "1520040152",
     "step": 2,
     "difficulty": 1,
     "level": 1,
     "total_damage": "2000000000",
     "is_final_hit": false,
-    "element_id": 1,
+    "element_id": [
+     "500002"
+    ],
     "name_localvalues": {
      "en": "Boss 2",
      "ja": "\u30dc\u30b92"
     },
     "squad": [
      {
-      "tid": 1002,
+      "combat": 240001,
       "costume_id": 0,
-      "lv": 200,
-      "combat": 100000
+      "lv": 520,
+      "slot": 1,
+      "tid": 301002
+     },
+     {
+      "combat": 240002,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 2,
+      "tid": 302002
+     },
+     {
+      "combat": 240003,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 3,
+      "tid": 303002
+     },
+     {
+      "combat": 240004,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 4,
+      "tid": 304002
+     },
+     {
+      "combat": 240005,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 5,
+      "tid": 305002
      }
     ],
-    "icon_id": 2002,
-    "monster_model_id": 5002
+    "icon_id": "bbg002_boss_intercept",
+    "monster_model_id": "152042"
    },
    {
     "openid": "o2",
     "nickname": "Bob",
     "day": 1,
-    "boss_id": 3,
+    "boss_id": "1520040153",
     "step": 3,
     "difficulty": 1,
     "level": 1,
     "total_damage": "100000000",
     "is_final_hit": false,
-    "element_id": 1,
+    "element_id": [
+     "500003"
+    ],
     "name_localvalues": {
      "en": "Boss 3",
      "ja": "\u30dc\u30b93"
     },
     "squad": [
      {
-      "tid": 1003,
+      "combat": 240001,
       "costume_id": 0,
-      "lv": 200,
-      "combat": 100000
+      "lv": 520,
+      "slot": 1,
+      "tid": 301003
+     },
+     {
+      "combat": 240002,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 2,
+      "tid": 302003
+     },
+     {
+      "combat": 240003,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 3,
+      "tid": 303003
+     },
+     {
+      "combat": 240004,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 4,
+      "tid": 304003
+     },
+     {
+      "combat": 240005,
+      "costume_id": 0,
+      "lv": 520,
+      "slot": 5,
+      "tid": 305003
      }
     ],
-    "icon_id": 2002,
-    "monster_model_id": 5003
+    "icon_id": "bbg003_boss_intercept",
+    "monster_model_id": "152043"
    },
    {
     "openid": "o3",
     "nickname": "Carol",
     "day": 0,
-    "boss_id": 4,
+    "boss_id": "1520040154",
     "step": 4,
     "difficulty": 2,
     "level": 4,
     "total_damage": "3000000000",
     "is_final_hit": false,
-    "element_id": 1,
+    "element_id": [
+     "500004"
+    ],
     "name_localvalues": {
      "en": "Boss 4",
      "ja": "\u30dc\u30b94"
     },
     "squad": [
      {
-      "tid": 1004,
+      "combat": 240001,
       "costume_id": 0,
-      "lv": 200,
-      "combat": 100000
+      "lv": 500,
+      "slot": 1,
+      "tid": 301004
+     },
+     {
+      "combat": 240002,
+      "costume_id": 0,
+      "lv": 500,
+      "slot": 2,
+      "tid": 302004
+     },
+     {
+      "combat": 240003,
+      "costume_id": 0,
+      "lv": 500,
+      "slot": 3,
+      "tid": 303004
+     },
+     {
+      "combat": 240004,
+      "costume_id": 0,
+      "lv": 500,
+      "slot": 4,
+      "tid": 304004
+     },
+     {
+      "combat": 240005,
+      "costume_id": 0,
+      "lv": 500,
+      "slot": 5,
+      "tid": 305004
      }
     ],
-    "icon_id": 2003,
-    "monster_model_id": 5004
+    "icon_id": "bbg004_boss_intercept",
+    "monster_model_id": "152044"
    }
   ]
  }

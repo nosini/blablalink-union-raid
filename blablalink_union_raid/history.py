@@ -34,10 +34,10 @@ CREATE TABLE IF NOT EXISTS runs (
     step INTEGER NOT NULL,
     damage INTEGER NOT NULL,
     final_hit INTEGER NOT NULL,
-    element_id INTEGER NOT NULL DEFAULT 0,
-    icon_id INTEGER NOT NULL DEFAULT 0,
     monster_model_id INTEGER NOT NULL DEFAULT 0,
-    squad TEXT NOT NULL DEFAULT '[]'
+    squad TEXT NOT NULL DEFAULT '[]',
+    elements TEXT NOT NULL DEFAULT '[]',
+    boss_icon TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS runs_season ON runs(season_id);
 """
@@ -45,11 +45,14 @@ CREATE INDEX IF NOT EXISTS runs_season ON runs(season_id);
 
 # Columns added after the first version; older databases get them on open.
 ADDED_COLUMNS = {
-    "element_id": "INTEGER NOT NULL DEFAULT 0",
-    "icon_id": "INTEGER NOT NULL DEFAULT 0",
     "monster_model_id": "INTEGER NOT NULL DEFAULT 0",
     "squad": "TEXT NOT NULL DEFAULT '[]'",
+    "elements": "TEXT NOT NULL DEFAULT '[]'",
+    "boss_icon": "TEXT NOT NULL DEFAULT ''",
 }
+# Columns of an intermediate version that read these fields wrongly (it took
+# the element list and the boss icon name for numbers); they only hold zeros.
+DROPPED_COLUMNS = ("element_id", "icon_id")
 
 
 class HistoryError(RuntimeError):
@@ -84,6 +87,9 @@ class Store:
                 if column not in have:
                     self.db.execute(
                         f"ALTER TABLE runs ADD COLUMN {column} {definition}")
+            for column in DROPPED_COLUMNS:
+                if column in have:
+                    self.db.execute(f"ALTER TABLE runs DROP COLUMN {column}")
 
     def close(self):
         self.db.close()
@@ -109,12 +115,12 @@ class Store:
             self.db.executemany(
                 "INSERT INTO runs (season_id, openid, nickname, day, number, "
                 "boss_id, boss_name, difficulty, level, step, damage, "
-                "final_hit, element_id, icon_id, monster_model_id, squad) "
+                "final_hit, monster_model_id, squad, elements, boss_icon) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 [(season_id, m.openid, m.nickname, r.day, r.number,
                   r.boss_id, r.boss_name, r.difficulty, r.level, r.step,
-                  r.damage, int(r.final_hit), r.element_id, r.icon_id,
-                  r.monster_model_id, json.dumps(r.squad))
+                  r.damage, int(r.final_hit), r.monster_model_id,
+                  json.dumps(r.squad), json.dumps(r.elements), r.boss_icon)
                  for m in members for r in m.runs])
         return bool(row)
 
@@ -143,15 +149,15 @@ class Store:
                 f"{', '.join(self.names()) or 'none'}")
         members = {}
         for (openid, nickname, day, number, boss_id, boss_name, difficulty,
-             level, step, damage, final_hit, element_id, icon_id,
-             monster_model_id, squad) in self.db.execute(
+             level, step, damage, final_hit, monster_model_id, squad,
+             elements, boss_icon) in self.db.execute(
                 "SELECT openid, nickname, day, number, boss_id, boss_name, "
-                "difficulty, level, step, damage, final_hit, element_id, "
-                "icon_id, monster_model_id, squad FROM runs "
+                "difficulty, level, step, damage, final_hit, "
+                "monster_model_id, squad, elements, boss_icon FROM runs "
                 "WHERE season_id = ? ORDER BY rowid", (row[0],)):
             member = members.setdefault(openid, Member(openid, nickname))
             member.runs.append(Run(
                 day, number, difficulty, level, boss_id, boss_name, step,
-                damage, bool(final_hit), json.loads(squad), element_id,
-                icon_id, monster_model_id))
+                damage, bool(final_hit), json.loads(squad),
+                json.loads(elements), boss_icon, monster_model_id))
         return sorted(members.values(), key=lambda m: (-m.total, m.nickname))

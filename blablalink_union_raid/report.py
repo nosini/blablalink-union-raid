@@ -69,13 +69,16 @@ def _season(members, previous, previous_name, only=None):
     shown = _shown(members, only)
     ds = days(shown)
     compared = previous is not None
+    leveled = any(m.level for m in shown)
     header = (["#"] if compared else []) + ["Member"] \
+        + (["Lv"] if leveled else []) \
         + [f"D{d}" for d in ds] + ["Total"] \
         + (["Was", "Move", "Change"] if compared else [])
     rows = []
     for m in shown:
         c = changes.get(m.openid)
         row = ([str(c.rank)] if compared else []) + [m.nickname] \
+            + ([str(m.level or "")] if leveled else []) \
             + [f"{m.day_total(d):,}" for d in ds] + [f"{m.total:,}"]
         if compared:
             row += ["-" if c.prev_rank is None else str(c.prev_rank),
@@ -86,7 +89,7 @@ def _season(members, previous, previous_name, only=None):
     if compared:
         title += f", compared with {previous_name}" if previous_name else \
             ", compared with the previous season"
-    left = {1, len(header) - 2} if compared else {0}
+    left = {1, len(header) - 2} if compared else {0}  # Member, Move
     text = _grid(title, header, rows, left=left)
     absent = [c for c in changes.values()
               if c.rank is None and only is None]
@@ -102,15 +105,16 @@ def runs_csv(members, day=None, previous=None, previous_name="", only=None):
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
     writer.writerow(["openid", "member", "day", "run", "boss", "difficulty",
-                     "level", "damage", "final_hit", "element_id",
-                     "monster_model_id", "squad"])
+                     "level", "damage", "final_hit", "elements",
+                     "boss_icon", "monster_model_id", "squad"])
     for m in _shown(members, only):
         for r in m.runs:
             if day and r.day != day:
                 continue
             writer.writerow([m.openid, m.nickname, r.day, r.number,
                              r.boss_name, r.difficulty, r.level, r.damage,
-                             int(r.final_hit), r.element_id,
+                             int(r.final_hit),
+                             ";".join(map(str, r.elements)), r.boss_icon,
                              r.monster_model_id,
                              json.dumps(r.squad, separators=(",", ":"))])
     return out.getvalue()
@@ -124,7 +128,7 @@ def summary_csv(members, day=None, previous=None, previous_name="", only=None):
     width = max((r.number for m in members for r in m.runs), default=0)
     writer.writerow(["openid", "member", "day"]
                     + [f"run{i}" for i in range(1, width + 1)]
-                    + ["day_total", "member_total"]
+                    + ["day_total", "member_total", "level"]
                     + (["rank", "prev_rank", "move", "prev_total"]
                        if previous is not None else []))
     for m in _shown(members, only):
@@ -135,7 +139,7 @@ def summary_csv(members, day=None, previous=None, previous_name="", only=None):
             runs = _runs(m, d)
             row = ([m.openid, m.nickname, d] + runs
                    + [""] * (width - len(runs))
-                   + [m.day_total(d), m.total])
+                   + [m.day_total(d), m.total, m.level])
             if previous is not None:
                 row += [c.rank, "" if c.prev_rank is None else c.prev_rank,
                         "" if c.move is None else c.move, c.prev_total]
@@ -151,11 +155,12 @@ def as_json(members, day=None, previous=None, previous_name="", only=None):
             "openid": m.openid,
             "member": m.nickname,
             "total": m.total,
-            "icon_id": next((r.icon_id for r in m.runs), 0),
+            "level": m.level,
             "days": {str(d): {"runs": [{"run": r.number, "boss": r.boss_name,
                                         "damage": r.damage,
                                         "final_hit": r.final_hit,
-                                        "element_id": r.element_id,
+                                        "elements": r.elements,
+                                        "boss_icon": r.boss_icon,
                                         "squad": r.squad}
                                        for r in m.day_runs(d)],
                               "total": m.day_total(d)}

@@ -24,9 +24,9 @@ class Run:
     step: int
     damage: int
     final_hit: bool
-    squad: list = field(default_factory=list)  # [{tid, costume_id, lv, combat}]
-    element_id: int = 0
-    icon_id: int = 0
+    squad: list = field(default_factory=list)  # [{slot, tid, costume_id, lv, combat}]
+    elements: list = field(default_factory=list)
+    boss_icon: str = ""
     monster_model_id: int = 0
 
 
@@ -40,6 +40,16 @@ class Member:
     def total(self):
         return sum(run.damage for run in self.runs)
 
+    @property
+    def level(self):
+        """Highest character level in the member's squads, 0 if unknown.
+
+        The squad characters share one level (the sync level), so this is the
+        member's level.
+        """
+        return max((_int(c.get("lv")) for run in self.runs
+                    for c in run.squad), default=0)
+
     def day_runs(self, day):
         return [run for run in self.runs if run.day == day]
 
@@ -52,6 +62,13 @@ def _int(value):
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _ints(value):
+    """A list of ints from a list or a single value (the API sends a list)."""
+    if value is None or value == "":
+        return []
+    return [_int(v) for v in (value if isinstance(value, list) else [value])]
 
 
 def boss_name(localvalues, lang="en"):
@@ -92,8 +109,8 @@ def parse(data, lang="en"):
             damage=_int(row.get("total_damage")),
             final_hit=bool(row.get("is_final_hit")),
             squad=row.get("squad") or [],
-            element_id=_int(row.get("element_id")),
-            icon_id=_int(row.get("icon_id")),
+            elements=_ints(row.get("element_id")),
+            boss_icon=str(row.get("icon_id") or ""),
             monster_model_id=_int(row.get("monster_model_id")),
         ))
     return sorted(members.values(), key=lambda m: (-m.total, m.nickname))

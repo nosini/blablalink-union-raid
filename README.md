@@ -115,12 +115,17 @@ Carol      -    2  absent              -  3,000,000,000
 
 The API returns one row per run (`participate_data`: `openid`, `nickname`,
 `day`, `boss_id`, `step`, `difficulty`, `level`, `total_damage`,
-`is_final_hit`, `element_id`, `icon_id`, `monster_model_id`, `name_localvalues`
-and `squad`). The history keeps all of them, with the boss name in the
-language chosen at ingest, including the squad: the characters used in the run with
-their `tid`, `costume_id`, `lv` (character level) and `combat` (combat power).
-`level` is the raid tier of the run; the rows have no player (commander)
-level. `runs-csv` and `json` include the squad, element and boss model.
+`is_final_hit`, `element_id` (a list), `icon_id` (the boss's icon name),
+`monster_model_id`, `name_localvalues` and `squad`). The history keeps all of
+them, with the boss name in the language chosen at ingest. `level` is the raid
+tier of the run. The `squad` lists the characters used (`slot`, `tid`,
+`costume_id`, `lv`, `combat`).
+
+A member's **level** is the highest `lv` in their squads. The characters of a
+squad share one level (the sync level), so that is the member's level. It is
+shown as `Lv` in the season totals, as `level` in `summary-csv` and `json`,
+and stays empty for seasons ingested without squad data. `runs-csv` and `json`
+also include the squad, boss elements, boss icon and model.
 
 Databases made by an earlier version are updated when opened. Runs ingested
 before that have no squad data until you ingest their file again. Runs are grouped per member in API order and
