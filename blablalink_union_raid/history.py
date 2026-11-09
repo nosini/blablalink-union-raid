@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""Keep the runs of every ingested season in a local SQLite database.
+
+The database holds member names and openids, so it lives in the user's data
+directory (not in this repository) and is only readable by the user.
+"""
+
+import os
+from pathlib import Path
+import sqlite3
+import time
+
+from .model import Member, Run
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS seasons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    ingested_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS runs (
+    season_id INTEGER NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
+    openid TEXT NOT NULL,
+    nickname TEXT NOT NULL,
+    day INTEGER NOT NULL,
+    number INTEGER NOT NULL,
+    boss_id INTEGER NOT NULL,
+    boss_name TEXT NOT NULL,
+    difficulty INTEGER NOT NULL,
+    level INTEGER NOT NULL,
+    step INTEGER NOT NULL,
+    damage INTEGER NOT NULL,
+    final_hit INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS runs_season ON runs(season_id);
+"""
+
+
+class HistoryError(RuntimeError):
+    pass
+
+
+def default_path():
+    base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share"
+    return Path(base) / "blablalink-union-raid" / "history.sqlite3"
+
+
+class Store:
+    def __init__(self, path=None):
+        self.path = Path(path) if path else default_path()
+        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        # Create the file private before SQLite does with default permissions.
+        os.close(os.open(self.path, os.O_CREAT | os.O_RDONLY, 0o600))
+        self.db = sqlite3.connect(self.path)
+        self.db.execute("PRAGMA foreign_keys = ON")
+        self.db.executescript(SCHEMA)
+
+    def close(self):
+        self.db.close()
+
+    def save(self, name, members):
+        """Store a season. Saving a name again replaces its runs, keeping its
+        place in the history, so a running season can be ingested repeatedly.
+        """
+        with self.db:
+            row = self.db.execute(
+                "SELECT id FROM seasons WHERE name = ?", (name,)).fetchone()
+            if row:
+                season_id = row[0]
+                self.db.execute(
+                    "DELETE FROM runs WHERE season_id = ?", (season_id,))
+                self.db.execute(
+                    "UPDATE seasons SET ingested_at = ? WHERE id = ?",
+                    (time.strftime("%Y-%m-%d %H:%M:%S"), season_id))
+            else:
+                season_id = self.db.execute(
+                    "INSERT INTO seasons (name, ingested_at) VALUES (?, ?)",
+                    (name, time.strftime("%Y-%m-%d %H:%M:%S"))).lastrowid
+            self.db.executemany(
+                "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                [(season_id, m.openid, m.nickname, r.day, r.number,
+                  r.boss_id, r.boss_name, r.difficulty, r.level, r.step,
+                  r.damage, int(r.final_hit))
+                 for m in members for r in m.runs])
+        return bool(row)
+
+    def seasons(self):
+        """(name, ingested_at, members, total damage), oldest first."""
+        return self.db.execute("""
+            SELECT s.name, s.ingested_at, COUNT(DISTINCT r.openid),
+                   COALESCE(SUM(r.damage), 0)
+            FROM seasons s LEFT JOIN runs r ON r.season_id = s.id
+            GROUP BY s.id ORDER BY s.id""").fetchall()
+
+    def names(self):
+        return [row[0] for row in self.seasons()]
+
+    def load(self, name):
+        row = self.db.execute(
+            "SELECT id FROM seasons WHERE name = ?", (name,)).fetchone()
+        if not row:
+            raise HistoryError(
+                f"no season named {name!r}; stored: "
+                f"{', '.join(self.names()) or 'none'}")
+        members = {}
+        for (openid, nickname, day, number, boss_id, boss_name, difficulty,
+             level, step, damage, final_hit) in self.db.execute(
+                "SELECT openid, nickname, day, number, boss_id, boss_name, "
+                "difficulty, level, step, damage, final_hit FROM runs "
+                "WHERE season_id = ? ORDER BY rowid", (row[0],)):
+            member = members.setdefault(openid, Member(openid, nickname))
+            member.runs.append(Run(day, number, difficulty, level, boss_id,
+                                   boss_name, step, damage, bool(final_hit)))
+        return sorted(members.values(), key=lambda m: (-m.total, m.nickname))

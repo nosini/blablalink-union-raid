@@ -6,8 +6,10 @@ import argparse
 import json
 import sys
 
+from . import compare as comparison
 from . import report
 from .api import ApiError, Client
+from .history import HistoryError, Store
 from .model import DataError, parse
 
 FORMATS = {
@@ -55,6 +57,54 @@ def cmd_report(args):
     print(FORMATS[args.format](members, args.day).rstrip("\n"))
 
 
+def cmd_ingest(args):
+    members = parse(load(args.input), args.lang)
+    store = Store(args.db)
+    try:
+        replaced = store.save(args.season, members)
+    finally:
+        store.close()
+    runs = sum(len(m.runs) for m in members)
+    print(f"{'replaced' if replaced else 'stored'} season {args.season!r}: "
+          f"{len(members)} members, {runs} runs ({store.path})")
+
+
+def cmd_seasons(args):
+    store = Store(args.db)
+    try:
+        seasons = store.seasons()
+    finally:
+        store.close()
+    if not seasons:
+        print("no seasons stored yet; use `ingest`")
+    for name, when, members, total in seasons:
+        print(f"{name}  ingested {when}  {members} members  {total:,} damage")
+
+
+def cmd_compare(args):
+    store = Store(args.db)
+    try:
+        names = store.names()
+        if args.old and args.new:
+            old_name, new_name = args.old, args.new
+        elif len(names) >= 2 and not (args.old or args.new):
+            old_name, new_name = names[-2:]
+        elif args.old or args.new:
+            raise HistoryError("give both --from and --to, or neither")
+        else:
+            raise HistoryError("need at least two stored seasons to compare "
+                               f"(have {len(names)}); use `ingest`")
+        changes = comparison.compare(store.load(old_name), store.load(new_name))
+    finally:
+        store.close()
+    if args.format == "csv":
+        print(comparison.as_csv(changes).rstrip("\n"))
+    elif args.format == "json":
+        print(comparison.as_json(changes, old_name, new_name))
+    else:
+        print(comparison.table(changes, old_name, new_name))
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="blablalink-union-raid",
@@ -80,6 +130,32 @@ def build_parser():
     rep.add_argument("--member", help="only members matching this name/openid")
     rep.add_argument("--lang", default="en", help="boss name language")
     rep.set_defaults(func=cmd_report)
+
+    db = argparse.ArgumentParser(add_help=False)
+    db.add_argument("--db", help="history database (default: "
+                    "~/.local/share/blablalink-union-raid/history.sqlite3)")
+
+    ingest = sub.add_parser(
+        "ingest", parents=[db],
+        help="add a season to the history (same name again replaces it)")
+    ingest.add_argument("input", help="same files as `report`")
+    ingest.add_argument("--season", required=True,
+                        help="a name for this season, e.g. 2026-10 or its id")
+    ingest.add_argument("--lang", default="en", help="boss name language")
+    ingest.set_defaults(func=cmd_ingest)
+
+    seasons = sub.add_parser("seasons", parents=[db],
+                             help="list the stored seasons")
+    seasons.set_defaults(func=cmd_seasons)
+
+    comp = sub.add_parser(
+        "compare", parents=[db],
+        help="rank changes between two seasons (default: the last two added)")
+    comp.add_argument("--from", dest="old", help="the older season")
+    comp.add_argument("--to", dest="new", help="the newer season")
+    comp.add_argument("--format", choices=["table", "csv", "json"],
+                      default="table")
+    comp.set_defaults(func=cmd_compare)
     return parser
 
 
@@ -87,5 +163,5 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
         args.func(args)
-    except (ApiError, DataError, OSError) as exc:
+    except (ApiError, DataError, HistoryError, OSError) as exc:
         raise SystemExit(f"error: {exc}")

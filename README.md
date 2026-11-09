@@ -60,6 +60,44 @@ python -m blablalink_union_raid report raid.json
 
 `raid.json` holds every member's names and openids; treat it as private too.
 
+## History and season comparison
+
+Keep each season's result, then see who moved up or down in the damage
+ranking:
+
+```sh
+# after saving each season's response as raid.json (see above)
+python -m blablalink_union_raid ingest raid.json --season 2026-10
+python -m blablalink_union_raid seasons
+python -m blablalink_union_raid compare                  # last two added
+python -m blablalink_union_raid compare --from 2026-09 --to 2026-10
+python -m blablalink_union_raid compare --format csv     # or json
+```
+
+```
+2026-09 -> 2026-10
+Member  Rank  Was  Move            Total            Was          Change
+Bob        1    3  up 2    5,500,000,000  2,600,000,000  +2,900,000,000
+Dave       2    -  new     2,500,000,000              -
+Alice      3    1  down 2  1,000,000,000  3,900,000,000  -2,900,000,000
+Carol      -    2  absent              -  3,000,000,000
+```
+
+- Rank is by total damage in the season, highest first. Members are matched
+  by openid, so a renamed member keeps their history and shows the new name.
+- `new`: wasn't in the older season. `absent`: has no runs in the newer one.
+  The data only lists members who fought, so absent can also mean a member who
+  skipped the raid, not only one who left the union.
+- Seasons are ordered by when they were first ingested; the default
+  comparison is the last two. Ingest them oldest first, or name them with
+  `--from` and `--to`. Ingesting a name again replaces it and keeps its place,
+  so a running season can be updated as it goes.
+- The history is a SQLite file at
+  `~/.local/share/blablalink-union-raid/history.sqlite3` (or under
+  `$XDG_DATA_HOME`; override with `--db`), readable only by you. It holds
+  member names and openids and is deliberately outside this repository.
+  Delete the file to forget everything.
+
 ## Data
 
 The API returns one row per run (`participate_data`: `openid`, `nickname`,

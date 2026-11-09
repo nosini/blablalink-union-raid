@@ -1,0 +1,128 @@
+{
+ "code": 0,
+ "msg": "ok",
+ "data": {
+  "participate_data": [
+   {
+    "openid": "o2",
+    "nickname": "Bob",
+    "day": 0,
+    "boss_id": 1,
+    "step": 1,
+    "difficulty": 1,
+    "level": 1,
+    "total_damage": "3000000000",
+    "is_final_hit": false,
+    "element_id": 1,
+    "name_localvalues": {
+     "en": "Boss 1",
+     "ja": "\u30dc\u30b91"
+    },
+    "squad": [
+     {
+      "tid": 1001,
+      "costume_id": 0,
+      "lv": 200,
+      "combat": 100000
+     }
+    ]
+   },
+   {
+    "openid": "o2",
+    "nickname": "Bob",
+    "day": 1,
+    "boss_id": 1,
+    "step": 1,
+    "difficulty": 1,
+    "level": 1,
+    "total_damage": "2500000000",
+    "is_final_hit": false,
+    "element_id": 1,
+    "name_localvalues": {
+     "en": "Boss 1",
+     "ja": "\u30dc\u30b91"
+    },
+    "squad": [
+     {
+      "tid": 1001,
+      "costume_id": 0,
+      "lv": 200,
+      "combat": 100000
+     }
+    ]
+   },
+   {
+    "openid": "o1",
+    "nickname": "Alice",
+    "day": 0,
+    "boss_id": 1,
+    "step": 1,
+    "difficulty": 1,
+    "level": 1,
+    "total_damage": "1000000000",
+    "is_final_hit": false,
+    "element_id": 1,
+    "name_localvalues": {
+     "en": "Boss 1",
+     "ja": "\u30dc\u30b91"
+    },
+    "squad": [
+     {
+      "tid": 1001,
+      "costume_id": 0,
+      "lv": 200,
+      "combat": 100000
+     }
+    ]
+   },
+   {
+    "openid": "o4",
+    "nickname": "Dave",
+    "day": 0,
+    "boss_id": 1,
+    "step": 1,
+    "difficulty": 1,
+    "level": 1,
+    "total_damage": "2000000000",
+    "is_final_hit": false,
+    "element_id": 1,
+    "name_localvalues": {
+     "en": "Boss 1",
+     "ja": "\u30dc\u30b91"
+    },
+    "squad": [
+     {
+      "tid": 1001,
+      "costume_id": 0,
+      "lv": 200,
+      "combat": 100000
+     }
+    ]
+   },
+   {
+    "openid": "o4",
+    "nickname": "Dave",
+    "day": 1,
+    "boss_id": 1,
+    "step": 1,
+    "difficulty": 1,
+    "level": 1,
+    "total_damage": "500000000",
+    "is_final_hit": false,
+    "element_id": 1,
+    "name_localvalues": {
+     "en": "Boss 1",
+     "ja": "\u30dc\u30b91"
+    },
+    "squad": [
+     {
+      "tid": 1001,
+      "costume_id": 0,
+      "lv": 200,
+      "combat": 100000
+     }
+    ]
+   }
+  ]
+ }
+}
