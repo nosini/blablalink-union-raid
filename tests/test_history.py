@@ -91,6 +91,13 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(store.names(), ["s1", "s2"])
         self.assertEqual(len(store.load("s1")), 3)  # not 6
 
+    def test_seasons_are_ordered_by_name_not_ingest_time(self):
+        store = Store(self.path)
+        for name in ("2026-10", "S10", "2026-09", "S9", "S100", "S2"):
+            store.save(name, parse(OLD))
+        self.assertEqual(store.names(), ["2026-09", "2026-10", "S2", "S9",
+                                         "S10", "S100"])
+
     def test_unknown_season(self):
         with self.assertRaisesRegex(HistoryError, "no season named 'x'"):
             Store(self.path).load("x")
@@ -131,6 +138,13 @@ class HistoryCli(unittest.TestCase):
         swapped = self.run_cli("compare", "--from", "2026-10", "--to", "2026-09",
                                "--db", self.db, "--format", "csv")
         self.assertIn("o2,Bob,3,1,-2,down 2", swapped)
+
+    def test_default_compare_ignores_ingest_order(self):
+        self.ingest("2026-10", "season2.json")  # newer season first
+        self.ingest("2026-09", "season.json")
+        text = self.run_cli("compare", "--db", self.db)
+        self.assertIn("2026-09 -> 2026-10", text)
+        self.assertIn("up 2", text)
 
     def test_half_a_range_is_an_error(self):
         self.ingest("a", "season.json")

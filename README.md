@@ -88,10 +88,12 @@ Carol      -    2  absent              -  3,000,000,000
 - `new`: wasn't in the older season. `absent`: has no runs in the newer one.
   The data only lists members who fought, so absent can also mean a member who
   skipped the raid, not only one who left the union.
-- Seasons are ordered by when they were first ingested; the default
-  comparison is the last two. Ingest them oldest first, or name them with
-  `--from` and `--to`. Ingesting a name again replaces it and keeps its place,
-  so a running season can be updated as it goes.
+- Seasons are ordered by name, with numbers compared as numbers (`2026-09`
+  before `2026-10`, `S9` before `S10`), whatever order you ingest them in. The
+  default comparison is the last two; the heading of the output shows which.
+  Use names that sort chronologically, or pick the pair with `--from` and
+  `--to`. Ingesting a name again replaces it, so a running season can be
+  updated as it goes.
 - The history is a SQLite file at
   `~/.local/share/blablalink-union-raid/history.sqlite3` (or under
   `$XDG_DATA_HOME`; override with `--db`), readable only by you. It holds

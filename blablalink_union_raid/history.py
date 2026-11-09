@@ -8,6 +8,7 @@ directory (not in this repository) and is only readable by the user.
 
 import os
 from pathlib import Path
+import re
 import sqlite3
 import time
 
@@ -39,6 +40,14 @@ CREATE INDEX IF NOT EXISTS runs_season ON runs(season_id);
 
 class HistoryError(RuntimeError):
     pass
+
+
+def season_order(name):
+    """Sort key putting '2026-09' before '2026-10' and 'S9' before 'S10'."""
+    # re.split alternates text and number, so keys of different names
+    # compare text with text and number with number.
+    return [int(part) if part.isdigit() else part
+            for part in re.split(r"(\d+)", name)]
 
 
 def default_path():
@@ -86,12 +95,17 @@ class Store:
         return bool(row)
 
     def seasons(self):
-        """(name, ingested_at, members, total damage), oldest first."""
-        return self.db.execute("""
+        """(name, ingested_at, members, total damage), oldest first.
+
+        Oldest first means by name (see season_order), not by ingest time,
+        so seasons can be ingested in any order.
+        """
+        rows = self.db.execute("""
             SELECT s.name, s.ingested_at, COUNT(DISTINCT r.openid),
                    COALESCE(SUM(r.damage), 0)
             FROM seasons s LEFT JOIN runs r ON r.season_id = s.id
-            GROUP BY s.id ORDER BY s.id""").fetchall()
+            GROUP BY s.id""").fetchall()
+        return sorted(rows, key=lambda row: season_order(row[0]))
 
     def names(self):
         return [row[0] for row in self.seasons()]
