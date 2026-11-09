@@ -87,6 +87,21 @@ class ReadSecretTest(unittest.TestCase):
             with self.assertRaises(openbao.OpenBaoError):
                 openbao.read_secret(ADDRESS, "t", Opener(body), SECRET_PATH)
 
+    def test_the_error_lists_key_names_but_never_values(self):
+        cases = ((secret(RAID_READ_TOKEN="topsecret"), "missing"),
+                 (secret(RAID_WRITE_TOKEN="", OTHER="topsecret"), "empty"),
+                 (secret(RAID_WRITE_TOKEN=5), "int"),
+                 (secret(**{"RAID_WRITE_TOKEN ": "topsecret"}), "missing"))
+        for body, kind in cases:
+            with self.assertRaises(openbao.OpenBaoError) as raised:
+                openbao.read_secret(ADDRESS, "t", Opener(body), SECRET_PATH)
+            message = str(raised.exception)
+            self.assertIn(f"({kind})", message)
+            self.assertIn("keys found:", message)
+            self.assertNotIn("topsecret", message)
+        # a key with a stray space is visible in the quoted name
+        self.assertIn("'RAID_WRITE_TOKEN '", message)
+
     def test_connection_failure(self):
         with self.assertRaises(openbao.OpenBaoError):
             openbao.read_secret(ADDRESS, "t", Opener(error=OSError("down")),

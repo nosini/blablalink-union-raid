@@ -78,7 +78,7 @@ def read_secret(address, token, opener, path, mount=MOUNT, key=KEY):
         headers={"X-Vault-Token": token})
     try:
         with opener.open(request, timeout=30) as response:
-            value = json.load(response)["data"]["data"].get(key)
+            data = json.load(response)["data"]["data"]
     except urllib.error.HTTPError as exc:
         raise OpenBaoError({
             403: "OpenBao refused the read: the session may be expired or "
@@ -88,8 +88,14 @@ def read_secret(address, token, opener, path, mount=MOUNT, key=KEY):
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         raise OpenBaoError("OpenBao read failed: connection or response "
                            "problem") from None
+    value = data.get(key)
     if not isinstance(value, str) or not value.strip():
-        raise OpenBaoError(f"{mount}/{path} has no {key} value")
+        # Key names and the value's type are safe to show; the values are not.
+        found = ", ".join(repr(name) for name in sorted(data)) or "none"
+        kind = "missing" if key not in data else (
+            "empty" if value == "" else type(value).__name__)
+        raise OpenBaoError(f"{mount}/{path} has no usable {key} ({kind}); "
+                           f"keys found: {found}")
     return value
 
 
