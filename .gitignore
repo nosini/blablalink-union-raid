@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+# real raid data and cookies must never be committed
+cookies*.txt
+*.cookies
+raid*.json
+!tests/fixtures/*.json
