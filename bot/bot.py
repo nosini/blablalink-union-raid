@@ -95,8 +95,9 @@ async def season(interaction: discord.Interaction, season: str | None = None):
 @app_commands.autocomplete(season=season_names)
 async def day(interaction: discord.Interaction, day: int,
               season: str | None = None):
+    # All days are fetched: the change column compares with the day before.
     await show(interaction, lambda data: embeds.day(data, day), "/report",
-               day=day, season=season)
+               season=season)
 
 
 @raid.command(description="One member's runs")

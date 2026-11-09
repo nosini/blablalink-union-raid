@@ -63,46 +63,159 @@ def pages(title, intro, lines, footer):
     return result
 
 
+ESC = "\u001b"
+RESET = f"{ESC}[0m"
+COLOURS = {"green": 32, "red": 31, "yellow": 33, "blue": 34, "grey": 30}
+HEADER = ["#", "IGN", "Att", "Damage (M)", "Chg", "Remark"]
+LEFT = {1, 4, 5}
+NAME_WIDTH = 14
+
+
+def paint(text, colour):
+    return f"{ESC}[0;{COLOURS[colour]}m{text}{RESET}" if colour else text
+
+
+def clip(text):
+    text = text.replace("`", "'")
+    return text if len(text) <= NAME_WIDTH else text[:NAME_WIDTH - 1] + "…"
+
+
+def change(previous, current):
+    """('↑2', 'green') for a move up, comparing two ranks; None: no earlier."""
+    if previous is None:
+        return "-", "grey"
+    if current < previous:
+        return f"↑{previous - current}", "green"
+    if current > previous:
+        return f"↓{current - previous}", "red"
+    return "-", "grey"
+
+
+def grid(title, intro, rows, footer):
+    """Rows of (cells, colours-per-cell) as monospace tables in embeds.
+
+    Colours use Discord's ansi code blocks; widths come from the plain text.
+    """
+    cells = [HEADER] + [[str(c) for c in r[0]] for r in rows]
+    widths = [max(len(row[i]) for row in cells) for i in range(len(HEADER))]
+
+    def line(texts, colours):
+        out = []
+        for i, (text, width) in enumerate(zip(texts, widths)):
+            padded = text.ljust(width) if i in LEFT else text.rjust(width)
+            out.append(paint(padded, colours[i] if colours else None))
+        return "  ".join(out).rstrip()
+    head = line(HEADER, None)
+    body = [line(texts, r[1]) for texts, r in zip(cells[1:], rows)]
+    fence = len("```ansi\n\n```")
+    kept, used = [], len(intro) + len(head)
+    for text in body:
+        if used + len(text) + 1 > BUDGET:
+            kept.append("…" + f"and {len(body) - len(kept)} more")
+            break
+        kept.append(text)
+        used += len(text) + 1
+    chunks, current = [], []
+    for text in kept:
+        if sum(len(t) + 1 for t in current) + len(text) + len(head) + fence \
+                + len(intro) > BODY:
+            chunks.append(current)
+            current = []
+        current.append(text)
+    chunks.append(current)
+    result = []
+    for i, chunk in enumerate(chunks):
+        table = "\n".join([head] + chunk)
+        result.append(discord.Embed(
+            title=title if i == 0 else None,
+            description=(intro if i == 0 else "") + f"```ansi\n{table}\n```",
+            colour=COLOUR))
+    result[-1].set_footer(text=footer)
+    return result
+
+
+def counts(entry_or_member):
+    """(attempts, finishing blows) of a day entry or of a member's season."""
+    entries = entry_or_member["days"].values() if "days" in entry_or_member \
+        else [entry_or_member]
+    runs = [r for e in entries for r in e["runs"]]
+    return len(runs), sum(1 for r in runs if r["final_hit"])
+
+
 def season(data):
     members = data["members"]
     if not members:
         raise Empty("That season has no runs.")
     compared = data["compared_with"]
-    lines = []
+    rows = []
     for index, m in enumerate(members, 1):
         rank = m.get("rank") or index
-        line = f"{place(rank)} **{name(m['member'])}** · {short(m['total'])}"
-        if compared and m.get("previous"):
-            previous = m["previous"]
-            line += move(previous["status"])
-            if previous["rank"]:
-                line += f" ({signed(previous['delta'])})"
-        lines.append(line)
+        previous = m.get("previous") or {}
+        if compared and previous.get("rank"):
+            sign, colour = change(previous["rank"], rank)
+        elif compared:
+            sign, colour = "New!", "yellow"
+        else:
+            sign, colour = "-", "grey"
+        attempts, finishers = counts(m)
+        remark = f"Finisher x{finishers}" if finishers else ""
+        rows.append(([rank, clip(m["member"]), attempts,
+                      m["total"] // 10**6, sign, remark],
+                     [None, None, None, None, colour,
+                      "blue" if finishers else None]))
     intro = f"**Union total** {short(sum(m['total'] for m in members))}" \
-            f" · {len(members)} members"
+            f" · {len(members)} members\n"
     footer = f"Updated {data['ingested_at']}"
     if compared:
         footer += f" · changes against {compared}"
-    return pages(f"Union Raid · {data['season']}", intro + "\n", lines, footer)
+    return grid(f"Union Raid · {data['season']}", intro, rows, footer)
+
+
+def day_ranking(members, number):
+    """[(member, entry)] best first, and the attempts that count as full.
+
+    Members who made every attempt come first, then the others, each by
+    damage: the order the union leader's sheet uses.
+    """
+    key = str(number)
+    played = [(m, m["days"][key]) for m in members if key in m["days"]]
+    full = max((len(e["runs"]) for _, e in played), default=0)
+    played.sort(key=lambda p: (len(p[1]["runs"]) < full, -p[1]["total"],
+                               p[0]["member"]))
+    return played, full
 
 
 def day(data, number):
-    key = str(number)
-    rows = sorted(((m["member"], m["days"][key]) for m in data["members"]
-                   if key in m["days"]), key=lambda row: -row[1]["total"])
-    if not rows:
+    played, full = day_ranking(data["members"], number)
+    if not played:
         raise Empty(f"No runs on day {number} of {data['season']}.")
-    lines = []
-    for index, (who, entry) in enumerate(rows, 1):
-        runs = " · ".join(short(r["damage"]) for r in entry["runs"])
-        line = f"{place(index)} **{name(who)}** · {short(entry['total'])}"
-        if len(entry["runs"]) > 1:
-            line += f"\n⠀⠀{runs}"
-        lines.append(line)
-    intro = f"**Day total** {short(sum(e['total'] for _, e in rows))}" \
-            f" · {len(rows)} members\n"
-    return pages(f"Union Raid · {data['season']} · day {number}", intro,
-                 lines, f"Updated {data['ingested_at']}")
+    before = {}
+    if number > 1:
+        before = {m["openid"]: i for i, (m, _) in
+                  enumerate(day_ranking(data["members"], number - 1)[0], 1)}
+    rows = []
+    for rank, (m, entry) in enumerate(played, 1):
+        attempts, finishers = counts(entry)
+        if number == 1 or not before:
+            sign, colour = "-", "grey"
+        elif m["openid"] not in before:
+            sign, colour = "New!", "yellow"
+        else:
+            sign, colour = change(before[m["openid"]], rank)
+        remarks = []
+        if attempts < full:
+            remarks.append("Unfinished")
+        if finishers:
+            remarks.append(f"Finisher x{finishers}")
+        rows.append(([rank, clip(m["member"]), attempts,
+                      entry["total"] // 10**6, sign, " · ".join(remarks)],
+                     [None, None, None, None, colour,
+                      "red" if attempts < full else
+                      "blue" if finishers else None]))
+    total = sum(e["total"] for _, e in played)
+    intro = f"**Day total** {short(total)} · {len(played)} members\n"
+    return grid(f"Union Raid · {data['season']} · day {number}", intro, rows,
+                f"Updated {data['ingested_at']}")
 
 
 def member(data):

@@ -4,6 +4,7 @@
 
 import json
 from pathlib import Path
+import re
 import sys
 import unittest
 
@@ -42,17 +43,55 @@ class EmbedTest(unittest.TestCase):
         self.assertEqual(embeds.short(1234), "1K")
         self.assertEqual(embeds.signed(-2_900_000_000), "-2.90B")
 
+    def plain(self, built):
+        return re.sub("\x1b\\[[0-9;]*m", "", self.text(built))
+
     def test_season_with_comparison(self):
         built = embeds.season(wrapped(self.new, self.old))
-        text = self.text(built)
-        self.assertIn("🥇 **Bob** · 5.50B 🟢▲2 (+2.90B)", text)
-        self.assertIn("🆕", text)  # Dave is new
+        text = self.plain(built)
+        self.assertIn("Damage (M)", text)
+        self.assertRegex(text, r"1\s+Bob\s+\d+\s+5500\s+↑2")
+        self.assertRegex(text, r"Dave\s.*New!")
+        self.assertRegex(text, r"Alice\s.*↓2")
+        self.assertIn("\x1b[0;32m↑2", self.text(built))  # green
         self.assertIn("2026-09", built[-1].footer.text)
 
     def test_season_without_comparison(self):
-        text = self.text(embeds.season(wrapped(self.old)))
-        self.assertIn("🥇", text)
-        self.assertNotIn("▲", text)
+        text = self.plain(embeds.season(wrapped(self.old)))
+        self.assertNotIn("↑", text)
+        self.assertNotIn("New!", text)
+
+    def test_day_ranks_like_the_leaders_sheet(self):
+        def entry(total, runs, kills=0):
+            return {"total": total, "runs": [
+                {"run": i, "boss": "B", "damage": total // runs,
+                 "final_hit": i <= kills, "elements": [], "boss_icon": "",
+                 "squad": []} for i in range(1, runs + 1)]}
+        members = [
+            # a is first on day 1, second on day 2; d has missed an attempt
+            {"openid": "a", "member": "Ann", "days": {
+                "1": entry(300_000_000, 3), "2": entry(200_000_000, 3, 2)}},
+            {"openid": "b", "member": "Bo", "days": {
+                "1": entry(200_000_000, 3), "2": entry(250_000_000, 3)}},
+            {"openid": "d", "member": "Di", "days": {
+                "1": entry(100_000_000, 3), "2": entry(900_000_000, 2)}},
+            {"openid": "n", "member": "Neo", "days": {
+                "2": entry(50_000_000, 3)}},
+        ]
+        data = {"season": "S", "ingested_at": "t", "compared_with": None,
+                "members": members}
+        rows = self.plain(embeds.day(data, 2)).splitlines()
+        body = [r.split() for r in rows if r.split()[:1] and
+                r.split()[0].isdigit()]
+        # Di made 2 of 3 attempts: last despite the most damage
+        self.assertEqual([r[1] for r in body], ["Bo", "Ann", "Neo", "Di"])
+        self.assertEqual(body[0][4], "↑1")      # Bo was 2nd on day 1
+        self.assertEqual(body[1][4], "↓1")
+        self.assertEqual(body[2][4], "New!")
+        self.assertIn("Finisher x2", " ".join(body[1]))
+        self.assertIn("Unfinished", " ".join(body[3]))
+        first = self.plain(embeds.day(data, 1))
+        self.assertNotIn("↑", first)  # nothing to compare with
 
     def test_day_and_member(self):
         data = wrapped(self.new, self.old)
@@ -80,6 +119,9 @@ class EmbedTest(unittest.TestCase):
                                  + len(e.footer.text or "")
                                  for e in built), 6000)
         self.assertIn("more", built[-1].description)
+        # every embed holds a complete code block
+        self.assertTrue(all(e.description.count("```") % 2 == 0
+                            for e in built))
 
     def test_names_cannot_inject_markdown_or_mentions(self):
         self.assertNotIn("@everyone", embeds.name("@everyone"))
