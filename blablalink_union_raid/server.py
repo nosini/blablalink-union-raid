@@ -7,6 +7,7 @@ the read token (GET endpoints, used by the Discord bot). TLS and public
 exposure are the reverse proxy's job; this listens on plain HTTP.
 
     PUT /seasons/<name>      body: JSON written by `fetch`
+    DELETE /seasons/<name>   remove a season (write token)
     GET /seasons             one line per stored season
     GET /report?season=&day=&member=
     GET /compare?from=&to=
@@ -92,6 +93,19 @@ def make_handler(store, lock, write_token, read_token):
             runs = sum(len(m.runs) for m in members)
             self.reply(200, f"{'replaced' if replaced else 'stored'} {name}: "
                        f"{len(members)} members, {runs} runs\n")
+
+        def do_DELETE(self):
+            match = re.fullmatch(r"/seasons/([^/]+)", urlsplit(self.path).path)
+            if not match:
+                return self.reply(404, "not found\n")
+            if not self.authorized(write_token):
+                return
+            name = unquote(match.group(1))
+            with lock:
+                removed = store.delete(name)
+            if not removed:
+                return self.reply(404, f"no season named {name}\n")
+            self.reply(200, f"removed {name}\n")
 
         def do_GET(self):
             url = urlsplit(self.path)

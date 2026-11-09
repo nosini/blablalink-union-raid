@@ -6,7 +6,7 @@ import types
 import unittest
 from unittest import mock
 
-from blablalink_union_raid.cli import clean_token
+from blablalink_union_raid.cli import clean_token, season_name
 from blablalink_union_raid.api import ApiError, Client, browser_cookies
 
 
@@ -81,6 +81,14 @@ class TokenTest(unittest.TestCase):
         for bad in (None, "", "  ", "a b", "a\x07b", "a\x1b[Ab"):
             with self.assertRaises(SystemExit):
                 clean_token(bad)
+
+
+class SeasonNameTest(unittest.TestCase):
+    def test_name_comes_from_the_season_id(self):
+        self.assertEqual(season_name("1000046"), "S46")
+        self.assertEqual(season_name("1000009"), "S9")
+        for other in ("", "46", "abc", "1000000"):
+            self.assertIsNone(season_name(other))
 
 
 if __name__ == "__main__":

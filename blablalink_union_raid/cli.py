@@ -66,17 +66,20 @@ def clean_token(value):
     return token
 
 
-def cmd_push(args):
-    token = clean_token(os.environ.get("RAID_WRITE_TOKEN"))
-    client = Client(args.cookies, browser=args.cookies_from_browser)
-    if args.season_id:
-        result = client.past_season(args.guild_id, args.area_id, args.season_id)
-    else:
-        result = client.current_season(args.guild_id, args.area_id, args.openid)
+def season_name(season_id):
+    """S46 for the season id 1000046: the id is 1000000 plus the number."""
+    if season_id.isdigit() and int(season_id) > 1_000_000:
+        return f"S{int(season_id) - 1_000_000}"
+    return None
+
+
+def send(url, method, name, data=None):
+    """Call the server's /seasons/<name> with the write token."""
     request = urllib.request.Request(
-        f"{args.url.rstrip('/')}/seasons/{urllib.parse.quote(args.season)}",
-        method="PUT", data=json.dumps(result).encode(),
-        headers={"Authorization": f"Bearer {token}",
+        f"{url.rstrip('/')}/seasons/{urllib.parse.quote(name)}",
+        method=method, data=data,
+        headers={"Authorization": "Bearer "
+                 + clean_token(os.environ.get("RAID_WRITE_TOKEN")),
                  "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
@@ -85,7 +88,25 @@ def cmd_push(args):
         raise SystemExit(f"error: server said {exc.code}: "
                          f"{exc.read().decode().strip()}")
     except urllib.error.URLError as exc:
-        raise SystemExit(f"error: can't reach {args.url}: {exc.reason}")
+        raise SystemExit(f"error: can't reach {url}: {exc.reason}")
+
+
+def cmd_push(args):
+    name = args.season or season_name(args.season_id or "")
+    if not name:
+        raise SystemExit("error: give --season (a past season's name is "
+                         "taken from its --season-id, e.g. S46)")
+    clean_token(os.environ.get("RAID_WRITE_TOKEN"))  # before any fetching
+    client = Client(args.cookies, browser=args.cookies_from_browser)
+    if args.season_id:
+        result = client.past_season(args.guild_id, args.area_id, args.season_id)
+    else:
+        result = client.current_season(args.guild_id, args.area_id, args.openid)
+    send(args.url, "PUT", name, json.dumps(result).encode())
+
+
+def cmd_remove(args):
+    send(args.url, "DELETE", args.season)
 
 
 def stored_seasons(args):
@@ -215,14 +236,21 @@ def build_parser():
         "push", help="fetch a season and send it to the server "
         "(token in RAID_WRITE_TOKEN; run it from cron or a timer)")
     push.add_argument("--url", required=True, help="e.g. https://raid.example")
-    push.add_argument("--season", required=True,
-                      help="name to store it under, e.g. 2026-10")
+    push.add_argument("--season", help="name to store it under, e.g. S47; "
+                      "default for --season-id 1000046 is S46")
     login(push)
     push.add_argument("--guild-id", help="default: your own union")
     push.add_argument("--area-id", type=int, help="default: your own union")
     push.add_argument("--openid", help="your openid, if the API asks for it")
     push.add_argument("--season-id", help="a past season; omit for the current")
     push.set_defaults(func=cmd_push)
+
+    remove = sub.add_parser(
+        "remove", help="delete a season from the server "
+        "(token in RAID_WRITE_TOKEN)")
+    remove.add_argument("--url", required=True)
+    remove.add_argument("--season", required=True, help="the stored name")
+    remove.set_defaults(func=cmd_remove)
 
     db = argparse.ArgumentParser(add_help=False)
     db.add_argument("--db", help="history database (default: "

@@ -124,6 +124,12 @@ class Store:
                  for m in members for r in m.runs])
         return bool(row)
 
+    def delete(self, name):
+        """Remove a season and its runs; False if there is no such season."""
+        with self.db:
+            return self.db.execute(
+                "DELETE FROM seasons WHERE name = ?", (name,)).rowcount > 0
+
     def seasons(self):
         """(name, ingested_at, members, total damage), oldest first.
 

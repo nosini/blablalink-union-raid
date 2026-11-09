@@ -181,11 +181,17 @@ gives `DISCORD_TOKEN`; no privileged intents needed). Invite it with an
 OAuth2 URL with the `applications.commands` scope (add `bot` to see it in
 the member list).
 
+Name seasons by their number, not by month: they run about every three
+weeks, so two can fall in one month. The season id is 1000000 plus the
+number (`1000046` is S46), and `push --season-id 1000046` names it `S46` by
+itself. For the running season give `--season S47`. `remove --season NAME`
+deletes a season from the server; pushing a name again replaces it.
+
 On the PC, run this from a timer or cron (it re-sends the running season,
 replacing the stored copy):
 
 ```sh
 RAID_WRITE_TOKEN=… python -m blablalink_union_raid push \
-  --url https://raid.example.org --season 2026-11 --cookies cookies.txt \
+  --url https://raid.example.org --season S47 --cookies cookies.txt \
   --guild-id GUILD --area-id AREA --openid 29080-123…
 ```

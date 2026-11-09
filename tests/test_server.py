@@ -89,6 +89,15 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.call(
             "GET", "/report?format=json", None)[0], 401)
 
+    def test_delete_needs_the_write_token(self):
+        self.put("old", "season.json")
+        self.assertEqual(self.call("DELETE", "/seasons/old", "r-token")[0], 401)
+        self.assertEqual(self.call("DELETE", "/seasons/old", None)[0], 401)
+        self.assertEqual(self.call("DELETE", "/seasons/old", "w-token")[0], 200)
+        self.assertEqual(self.call("DELETE", "/seasons/old", "w-token")[0], 404)
+        self.assertEqual(self.call("GET", "/seasons", "r-token")[1].strip(),
+                         "no seasons")
+
     def test_rejects_junk(self):
         self.assertEqual(self.call("PUT", "/seasons/x", "w-token", b"{}")[0], 400)
         self.assertEqual(self.call("PUT", "/seasons/x", "w-token", b"no")[0], 400)
