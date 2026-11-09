@@ -25,7 +25,8 @@ def wrapped(members, previous=None):
     return {"season": "2026-10", "ingested_at": "2026-11-09 20:17:35",
             "compared_with": "2026-09" if previous else None,
             "members": json.loads(report.as_json(
-                members, None, previous, "2026-09" if previous else ""))}
+                members, None, previous, "2026-09" if previous else "")),
+            "previous_members": json.loads(report.as_json(previous or []))}
 
 
 @unittest.skipUnless(embeds, "discord.py is not installed")
@@ -45,19 +46,37 @@ class EmbedTest(unittest.TestCase):
     def plain(self, built):
         return re.sub("\x1b\\[[0-9;]*m", "", self.text(built))
 
-    def test_season_with_comparison(self):
+    def test_season_is_the_last_day_against_last_seasons_same_day(self):
         built = embeds.season(wrapped(self.new, self.old))
         text = self.plain(built)
-        self.assertIn("Damage (M)", text)
-        self.assertRegex(text, r"1\s+Bob\s+\d+\s+5500\s+↑2")
-        self.assertRegex(text, r"Dave\s.*New!")
-        self.assertRegex(text, r"Alice\s.*↓2")
-        self.assertIn("\x1b[0;32m↑2", self.text(built))  # green
-        self.assertIn("2026-09", built[-1].footer.text)
+        self.assertIn("day 2", built[0].title)
+        self.assertNotIn("Alice", text)  # Alice never played day 2
+        # day 2: Bob 2500, Dave 500. Last season's day 2: Alice 1000,
+        # Bob 2100 -> Bob was 1st and stays, Dave is new.
+        self.assertRegex(text, r"1\s+Bob\s+1\s+2500\s+-")
+        self.assertRegex(text, r"2\s+Dave\s+1\s+500\s+New!")
+        self.assertIn("2026-09 day 2", built[-1].footer.text)
 
-    def test_season_without_comparison(self):
+    def test_season_moves_against_last_seasons_day(self):
+        def day2(openid, name, damage):
+            run = {"run": 1, "damage": damage, "final_hit": False,
+                   "boss": "B", "elements": [], "boss_icon": "", "squad": []}
+            return {"openid": openid, "member": name,
+                    "days": {"2": {"total": damage, "runs": [run]}}}
+        data = {"season": "S2", "ingested_at": "t", "compared_with": "S1",
+                "members": [day2("b", "Bea", 900), day2("a", "Abe", 800),
+                            day2("c", "Cy", 700)],
+                "previous_members": [day2("a", "Abe", 900),
+                                     day2("b", "Bea", 800)]}
+        text = self.plain(embeds.season(data))
+        self.assertRegex(text, r"1\s+Bea\s.*↑1")
+        self.assertRegex(text, r"2\s+Abe\s.*↓1")
+        self.assertRegex(text, r"3\s+Cy\s.*New!")
+
+    def test_season_without_a_last_season_has_no_changes(self):
         text = self.plain(embeds.season(wrapped(self.old)))
         self.assertNotIn("↑", text)
+        self.assertNotIn("↓", text)
         self.assertNotIn("New!", text)
 
     def test_day_ranks_like_the_leaders_sheet(self):
@@ -126,8 +145,8 @@ class EmbedTest(unittest.TestCase):
 
     def test_long_rankings_stay_within_discord_limits(self):
         data = wrapped(self.new)
-        data["members"] = [dict(data["members"][0], member=f"m{i}" * 6)
-                           for i in range(400)]
+        data["members"] = [dict(data["members"][0], member=f"m{i}" * 6,
+                                openid=str(i)) for i in range(400)]
         built = embeds.season(data)
         self.assertTrue(all(len(e.description) <= 4096 for e in built))
         self.assertLessEqual(sum(len(e.description) + len(e.title or "")

@@ -109,36 +109,6 @@ def counts(entry_or_member):
     return len(runs), sum(1 for r in runs if r["final_hit"])
 
 
-def season(data):
-    members = data["members"]
-    if not members:
-        raise Empty("That season has no runs.")
-    compared = data["compared_with"]
-    rows = []
-    for index, m in enumerate(members, 1):
-        rank = m.get("rank") or index
-        previous = m.get("previous") or {}
-        if compared and previous.get("rank"):
-            sign, colour = change(previous["rank"], rank)
-        elif compared:
-            sign, colour = "New!", "yellow"
-        else:
-            sign, colour = "-", "grey"
-        attempts, finishers = counts(m)
-        remark = f"Finisher x{finishers}" if finishers else ""
-        rows.append(([rank, clip(m["member"]), attempts,
-                      m["total"] // 10**6, sign, remark],
-                     [None, None, None, None, colour,
-                      "blue" if finishers else None]))
-    intro = f"**Union total** {short(sum(m['total'] for m in members))}" \
-            f" · {len(members)} members\n"
-    footer = f"Updated {data['ingested_at']}"
-    if compared:
-        footer += f" · changes against {compared}"
-    return grid(f"Union Raid · {data['season']}", intro, SHEET, SHEET_LEFT,
-                rows, footer)
-
-
 def day_ranking(members, number):
     """[(member, entry)] best first, and the attempts that count as full.
 
@@ -153,18 +123,28 @@ def day_ranking(members, number):
     return played, full
 
 
-def day(data, number):
+def ranks(members, number):
+    """openid -> rank of a day, in the order the sheet uses."""
+    return {m["openid"]: i for i, (m, _) in
+            enumerate(day_ranking(members, number)[0], 1)}
+
+
+def last_day(members):
+    return max((int(d) for m in members for d in m["days"]), default=0)
+
+
+def sheet(data, number, before, note):
+    """The sheet for one day; `before` maps openid to an earlier rank.
+
+    With nothing to compare against (None or empty) every change is '-'.
+    """
     played, full = day_ranking(data["members"], number)
     if not played:
         raise Empty(f"No runs on day {number} of {data['season']}.")
-    before = {}
-    if number > 1:
-        before = {m["openid"]: i for i, (m, _) in
-                  enumerate(day_ranking(data["members"], number - 1)[0], 1)}
     rows = []
     for rank, (m, entry) in enumerate(played, 1):
         attempts, finishers = counts(entry)
-        if number == 1 or not before:
+        if not before:
             sign, colour = "-", "grey"
         elif m["openid"] not in before:
             sign, colour = "New!", "yellow"
@@ -182,8 +162,28 @@ def day(data, number):
                       "blue" if finishers else None]))
     total = sum(e["total"] for _, e in played)
     intro = f"**Day total** {short(total)} · {len(played)} members\n"
+    footer = f"Updated {data['ingested_at']}"
+    if note:
+        footer += f" · changes against {note}"
     return grid(f"Union Raid · {data['season']} · day {number}", intro, SHEET,
-                SHEET_LEFT, rows, f"Updated {data['ingested_at']}")
+                SHEET_LEFT, rows, footer)
+
+
+def day(data, number):
+    """One day, with the change since the day before."""
+    before = ranks(data["members"], number - 1) if number > 1 else None
+    return sheet(data, number, before, f"day {number - 1}" if before else "")
+
+
+def season(data):
+    """The season's last day, compared with the same day of the season before."""
+    number = last_day(data["members"])
+    if not number:
+        raise Empty("That season has no runs.")
+    previous = data["compared_with"]
+    before = ranks(data["previous_members"], number) if previous else None
+    return sheet(data, number, before,
+                 f"{previous} day {number}" if before else "")
 
 
 RUNS = ["Day", "Run", "Boss", "Damage (M)", "Remark"]

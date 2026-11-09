@@ -27,7 +27,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from . import compare as comparison
 from . import report
 from .history import HistoryError, Store
-from .model import DataError, parse
+from .model import DataError, days, parse
 
 MAX_BODY = 20 * 1024 * 1024
 NAME = re.compile(r"[\w.\-]{1,64}")
@@ -39,6 +39,15 @@ def raid_data(data):
         if isinstance(data, dict) and key in data:
             return data[key]
     return data
+
+
+def brief(members):
+    """Each member's damage per day and run, without squads and the like."""
+    return [{"openid": m.openid, "member": m.nickname, "days": {
+        str(d): {"total": m.day_total(d), "runs": [
+            {"run": r.number, "damage": r.damage, "final_hit": r.final_hit}
+            for r in m.day_runs(d)]}
+        for d in days([m])}} for m in members]
 
 
 def make_handler(store, lock, write_token, read_token):
@@ -142,7 +151,8 @@ def make_handler(store, lock, write_token, read_token):
                 "season": name, "ingested_at": when,
                 "compared_with": before if previous else None,
                 "members": json.loads(report.as_json(
-                    members, day, previous, before, only))})
+                    members, day, previous, before, only)),
+                "previous_members": brief(previous or [])})
 
         def read(self, path, query):
             names = store.names()

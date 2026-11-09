@@ -85,7 +85,7 @@ async def seasons(interaction: discord.Interaction):
         description="\n".join(lines) or "No seasons stored yet."))
 
 
-@raid.command(description="Ranking for a season (default: the latest)")
+@raid.command(description="Final day of a season against the last season (default: latest)")
 @app_commands.autocomplete(season=season_names)
 async def season(interaction: discord.Interaction, season: str | None = None):
     await show(interaction, embeds.season, "/report", season=season)

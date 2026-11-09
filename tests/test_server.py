@@ -77,6 +77,9 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(report["compared_with"], "2026-09")
         self.assertEqual([m["member"] for m in report["members"]], ["Bob"])
         self.assertEqual(report["members"][0]["previous"]["status"], "up 2")
+        before = {m["member"]: m for m in report["previous_members"]}
+        self.assertEqual(before["Alice"]["days"]["1"]["total"], 2_900_000_000)
+        self.assertNotIn("squad", json.dumps(report["previous_members"]))
         changes = json.loads(self.call(
             "GET", "/compare?format=json", "r-token")[1])
         self.assertEqual((changes["from"], changes["to"]),
