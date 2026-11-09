@@ -4,7 +4,11 @@
 
 import argparse
 import json
+import os
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from . import compare as comparison
 from . import report
@@ -46,6 +50,30 @@ def cmd_fetch(args):
         print(f"wrote {args.output}", file=sys.stderr)
     else:
         print(text)
+
+
+def cmd_push(args):
+    token = os.environ.get("RAID_WRITE_TOKEN")
+    if not token:
+        raise SystemExit("error: set RAID_WRITE_TOKEN")
+    client = Client(args.cookies)
+    if args.season_id:
+        result = client.past_season(args.guild_id, args.area_id, args.season_id)
+    else:
+        if not args.openid:
+            raise SystemExit("--openid is needed for the current season")
+        result = client.current_season(args.guild_id, args.area_id, args.openid)
+    request = urllib.request.Request(
+        f"{args.url.rstrip('/')}/seasons/{urllib.parse.quote(args.season)}",
+        method="PUT", data=json.dumps(result).encode(),
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            print(response.read().decode().strip())
+    except urllib.error.HTTPError as exc:
+        raise SystemExit(f"error: server said {exc.code}: "
+                         f"{exc.read().decode().strip()}")
 
 
 def stored_seasons(args):
@@ -161,6 +189,19 @@ def build_parser():
     fetch.add_argument("--season-id", help="a past season; omit for the current")
     fetch.add_argument("-o", "--output", help="write JSON here, not to stdout")
     fetch.set_defaults(func=cmd_fetch)
+
+    push = sub.add_parser(
+        "push", help="fetch a season and send it to the server "
+        "(token in RAID_WRITE_TOKEN; run it from cron or a timer)")
+    push.add_argument("--url", required=True, help="e.g. https://raid.example")
+    push.add_argument("--season", required=True,
+                      help="name to store it under, e.g. 2026-10")
+    push.add_argument("--cookies", required=True)
+    push.add_argument("--guild-id", required=True)
+    push.add_argument("--area-id", required=True, type=int)
+    push.add_argument("--openid", help="your openid, for the current season")
+    push.add_argument("--season-id", help="a past season; omit for the current")
+    push.set_defaults(func=cmd_push)
 
     db = argparse.ArgumentParser(add_help=False)
     db.add_argument("--db", help="history database (default: "

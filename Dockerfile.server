@@ -1,0 +1,7 @@
+FROM python:3.11-slim
+RUN useradd --uid 10001 --no-create-home raid && mkdir /data && chown raid /data
+COPY blablalink_union_raid /app/blablalink_union_raid
+USER raid
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 RAID_DB=/data/history.sqlite3
+CMD ["python", "-m", "blablalink_union_raid.server"]

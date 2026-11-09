@@ -142,3 +142,37 @@ python -m unittest discover -s tests -t .
 ## License
 
 GNU Affero General Public License, version 3 or later (see [LICENSE](LICENSE)).
+
+## Server and Discord bot
+
+Run the scraper on your own PC (the cookies never leave it), push each
+fetch to a small server, and let a Discord bot read from it.
+
+```
+PC: push --PUT, write token--> Traefik --> api (SQLite) <--GET, read token-- bot --> Discord
+```
+
+- `blablalink_union_raid/server.py` is the API (`Dockerfile.server`). Two
+  different bearer tokens: `RAID_WRITE_TOKEN` (push only) and
+  `RAID_READ_TOKEN` (reading only).
+- `bot/bot.py` is the Discord bot (`Dockerfile.bot`). It connects out to
+  Discord, so it needs no port. Slash commands: `/raid seasons`,
+  `/raid season`, `/raid day`, `/raid member`, `/raid compare`.
+- `deploy/compose.yaml` runs both behind Traefik (`raid.${DOMAIN}.${TLD}`).
+  Supply `DOMAIN`, `TLD`, `RAID_WRITE_TOKEN`, `RAID_READ_TOKEN` and
+  `DISCORD_TOKEN` as environment inputs; generate the tokens with
+  `openssl rand -base64 32`.
+
+Create the bot at <https://discord.com/developers/applications> (Bot tab
+gives `DISCORD_TOKEN`; no privileged intents needed). Invite it with an
+OAuth2 URL with the `applications.commands` scope (add `bot` to see it in
+the member list).
+
+On the PC, run this from a timer or cron (it re-sends the running season,
+replacing the stored copy):
+
+```sh
+RAID_WRITE_TOKEN=… python -m blablalink_union_raid push \
+  --url https://raid.example.org --season 2026-11 --cookies cookies.txt \
+  --guild-id GUILD --area-id AREA --openid 29080-123…
+```

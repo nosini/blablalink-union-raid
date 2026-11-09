@@ -1,0 +1,64 @@
+name: union-raid
+
+services:
+  api:
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik_proxy-network
+      traefik.http.routers.union-raid.rule: Host(`raid.${DOMAIN}.${TLD}`)
+      traefik.http.routers.union-raid.entrypoints: websecure
+      traefik.http.routers.union-raid.service: union-raid
+      traefik.http.services.union-raid.loadbalancer.server.port: "8080"
+    container_name: union-raid-api
+    build:
+      context: ..
+      dockerfile: Dockerfile.server
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      proxy-network:
+      raid-network:
+    environment:
+      RAID_WRITE_TOKEN: ${RAID_WRITE_TOKEN}
+      RAID_READ_TOKEN: ${RAID_READ_TOKEN}
+    volumes:
+      - "raid.data:/data"
+
+  bot:
+    container_name: union-raid-bot
+    build:
+      context: ..
+      dockerfile: Dockerfile.bot
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - api
+    networks:
+      raid-network:
+      external-network:
+        gw_priority: 1
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      RAID_READ_TOKEN: ${RAID_READ_TOKEN}
+      RAID_URL: http://api:8080
+
+volumes:
+  raid.data:
+
+networks:
+  proxy-network:
+    external: true
+    name: traefik_proxy-network
+  raid-network:
+    internal: true
+  external-network:
+    driver: bridge
+    enable_ipv6: true
