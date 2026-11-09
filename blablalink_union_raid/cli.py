@@ -48,16 +48,30 @@ def cmd_fetch(args):
         print(text)
 
 
-def stored_season(args):
+def stored_seasons(args):
+    """(members, name, previous members or None, previous name)."""
     store = Store(args.db)
     try:
         names = store.names()
         name = args.season or (names[-1] if names else None)
         if name is None:
             raise HistoryError("no seasons stored yet; use `ingest`")
-        return store.load(name)
+        members = store.load(name)
+        previous, previous_name = _previous(store, names, name, args)
+        return members, previous, previous_name
     finally:
         store.close()
+
+
+def _previous(store, names, name, args):
+    if args.no_compare:
+        return None, ""
+    if args.against:
+        return store.load(args.against), args.against
+    if name in names and names.index(name) > 0:
+        before = names[names.index(name) - 1]
+        return store.load(before), before
+    return None, ""
 
 
 def cmd_report(args):
@@ -65,13 +79,22 @@ def cmd_report(args):
         raise SystemExit("error: give a file or --season, not both")
     if args.input:
         members = parse(load(args.input), args.lang)
+        previous, previous_name = None, ""
+        if args.against and not args.no_compare:
+            store = Store(args.db)
+            try:
+                previous, previous_name = store.load(args.against), args.against
+            finally:
+                store.close()
     else:
-        members = stored_season(args)
+        members, previous, previous_name = stored_seasons(args)
+    only = None
     if args.member:
         wanted = args.member.casefold()
-        members = [m for m in members if wanted in m.nickname.casefold()
-                   or wanted == m.openid]
-    print(FORMATS[args.format](members, args.day).rstrip("\n"))
+        only = {m.openid for m in members
+                if wanted in m.nickname.casefold() or wanted == m.openid}
+    print(FORMATS[args.format](members, args.day, previous, previous_name,
+                               only).rstrip("\n"))
 
 
 def cmd_ingest(args):
@@ -149,6 +172,11 @@ def build_parser():
                      "response saved from the browser's network tab; omit to "
                      "use a stored season")
     rep.add_argument("--season", help="a stored season (default: the latest)")
+    rep.add_argument("--against", metavar="SEASON",
+                     help="compare with this stored season (default for a "
+                     "stored season: the one before it; none for a file)")
+    rep.add_argument("--no-compare", action="store_true",
+                     help="don't compare with another season")
     rep.add_argument("--format", choices=FORMATS, default="table")
     rep.add_argument("--day", type=int, help="only this day (1-based)")
     rep.add_argument("--member", help="only members matching this name/openid")

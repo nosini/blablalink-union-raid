@@ -151,11 +151,47 @@ class HistoryCli(unittest.TestCase):
         self.ingest("2026-10", "season2.json")
         latest = self.run_cli("report", "--db", self.db)
         self.assertIn("Dave", latest)
-        self.assertNotIn("Carol", latest)
+        self.assertIn("compared with 2026-09", latest)
+        self.assertIn("No runs this season: Carol (was #2)", latest)
         old = self.run_cli("report", "--season", "2026-09", "--db", self.db,
                            "--format", "runs-csv", "--member", "carol")
         self.assertEqual(len(old.splitlines()), 1 + 1)
         self.assertIn("Day 2", self.run_cli("report", "--db", self.db, "--day", "2"))
+
+    def test_report_compares_with_previous_season_by_default(self):
+        self.ingest("2026-09", "season.json")
+        self.ingest("2026-10", "season2.json")
+        text = self.run_cli("report", "--db", self.db)
+        self.assertRegex(text, r"1\s+Bob .*\s3\s+up 2\s+\+2,900,000,000")
+        self.assertRegex(text, r"3\s+Alice .*\s1\s+down 2")
+        self.assertIn("compared with", self.run_cli(
+            "report", "--db", self.db, "--season", "2026-10"))
+        # the first season has nothing before it; options turn it off or pick one
+        self.assertNotIn("compared", self.run_cli(
+            "report", "--db", self.db, "--season", "2026-09"))
+        self.assertNotIn("compared", self.run_cli(
+            "report", "--db", self.db, "--no-compare"))
+        self.assertIn("compared with 2026-09", self.run_cli(
+            "report", str(FIXTURES / "season2.json"), "--db", self.db,
+            "--against", "2026-09"))
+        self.assertNotIn("compared", self.run_cli(
+            "report", str(FIXTURES / "season2.json"), "--db", self.db))
+
+    def test_member_filter_keeps_season_ranks(self):
+        self.ingest("2026-09", "season.json")
+        self.ingest("2026-10", "season2.json")
+        text = self.run_cli("report", "--db", self.db, "--member", "alice")
+        self.assertRegex(text, r"3\s+Alice")      # rank 3 of the season, not 1
+        self.assertNotIn("Bob", text)
+        self.assertNotIn("No runs this season", text)
+        csv_text = self.run_cli("report", "--db", self.db, "--member", "dave",
+                                "--format", "summary-csv")
+        self.assertEqual(csv_text.splitlines()[0].split(",")[-4:],
+                         ["rank", "prev_rank", "move", "prev_total"])
+        self.assertIn(",2,,,0", csv_text.splitlines()[1])
+        data = json.loads(self.run_cli("report", "--db", self.db, "--member",
+                                       "bob", "--format", "json"))
+        self.assertEqual((data[0]["rank"], data[0]["previous"]["move"]), (1, 2))
 
     def test_report_database_errors(self):
         with self.assertRaisesRegex(SystemExit, "no seasons stored"):

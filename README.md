@@ -86,6 +86,14 @@ Carol      -    2  absent              -  3,000,000,000
 - `report` reads a stored season too, without the JSON file:
   `report --season 2026-10`, or just `report` for the latest one. All its
   options (`--day`, `--member`, `--format`) work the same.
+- A stored season's report also compares with the season before it: the
+  season totals show each member's rank, their rank before, how far they
+  moved and the damage change, and members with no runs are listed below.
+  `summary-csv` and `json` get the same data. Use `--against SEASON` to pick
+  another season (also for a report from a file, which otherwise has no
+  comparison) or `--no-compare` to turn it off. A single `--day` has no
+  comparison, since it belongs to the season totals. `--member` only filters
+  what is shown; ranks are always those of the whole union.
 - Rank is by total damage in the season, highest first. Members are matched
   by openid, so a renamed member keeps their history and shows the new name.
 - `new`: wasn't in the older season. `absent`: has no runs in the newer one.
