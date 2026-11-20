@@ -151,6 +151,25 @@ class WriteTokenTest(unittest.TestCase):
             self.assertEqual(argv[3:], [python, "-m", "blablalink_union_raid",
                                         "push", "--season", "S47"])
 
+    def test_a_tilde_in_the_helper_path_is_expanded(self):
+        with tempfile.TemporaryDirectory() as home:
+            helper = os.path.join(home, "openbao-session")
+            open(helper, "w").close()
+            execute = mock.Mock()
+            environ = {openbao.HELPER: "~/openbao-session",
+                       openbao.PATH: SECRET_PATH}
+            with mock.patch.dict(os.environ, {"HOME": home}), \
+                    mock.patch("sys.argv", ["blablalink-union-raid", "push"]):
+                with self.assertRaises(openbao.OpenBaoError):
+                    openbao.write_token(environ, Opener(), execute)
+            self.assertEqual(execute.call_args[0][1][1], helper)
+
+    def test_a_missing_helper_file_is_named_in_the_error(self):
+        with self.assertRaises(openbao.OpenBaoError) as raised:
+            openbao.write_token({openbao.HELPER: "/no/such/helper",
+                                 openbao.PATH: SECRET_PATH}, Opener())
+        self.assertIn("/no/such/helper", str(raised.exception))
+
     def test_a_missing_helper_file_is_not_executed(self):
         execute = mock.Mock()
         with self.assertRaises(openbao.OpenBaoError):

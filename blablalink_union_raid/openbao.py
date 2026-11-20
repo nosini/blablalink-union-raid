@@ -102,12 +102,16 @@ def read_secret(address, token, opener, path, mount=MOUNT, key=KEY):
 def start_session(environ, execute=os.execv):
     """Replace this process by the same command under the login helper."""
     helper = environ.get(HELPER)
-    if not helper or not os.path.isfile(helper):
+    if not helper:
         raise OpenBaoError(
             "no OpenBao session. Run this command under the helper, e.g. "
-            "`~/Git/homelab-infra/scripts/openbao-session -- "
-            "blablalink-union-raid push ...`, or set "
+            "`openbao-session -- blablalink-union-raid push ...`, or set "
             f"{HELPER} to the helper's path")
+    # A quoted `~` reaches us unexpanded, e.g. from export X="~/...".
+    helper = os.path.expanduser(helper)
+    if not os.path.isfile(helper):
+        raise OpenBaoError(f"no OpenBao session, and {HELPER} is not a "
+                           f"file: {helper}")
     python = sys.executable
     execute(python, [python, helper, "--", python, "-m",
                      "blablalink_union_raid", *sys.argv[1:]])
