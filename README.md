@@ -6,15 +6,6 @@ the season total.
 
 No dependencies beyond Python 3.11.
 
-## Status: not tested against real data
-
-Union Raid data is only served to logged-in members of the union, and this
-was written without access to one. The request and data formats come from
-the website's own JavaScript (the Shifty's Pad union raid page), and the
-tests use synthetic data shaped like that. **The first run with a real union
-may need adjustments.** If it fails or the numbers look wrong, run
-`fetch`, remove names and ids from the file and share it.
-
 ## Usage
 
 Run `python -m blablalink_union_raid` from this folder, or
