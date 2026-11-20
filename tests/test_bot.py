@@ -2,22 +2,27 @@
 
 """The Discord bot's embeds; needs discord.py, skipped without it."""
 
+import asyncio
 import json
 from pathlib import Path
 import re
 import sys
 import unittest
+from unittest import mock
 
-from blablalink_union_raid import compare, report
+from blablalink_union_raid import compare, report, sheet
 from blablalink_union_raid.cli import load
 from blablalink_union_raid.model import parse
 from blablalink_union_raid.server import brief
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
 try:
+    import aiohttp
     import embeds
+    import bot
 except ImportError:
     embeds = None
+    bot = None
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -28,6 +33,18 @@ def wrapped(members, previous=None):
             "members": json.loads(report.as_json(
                 members, None, previous, "2026-09" if previous else "")),
             "previous_members": json.loads(report.as_json(previous or []))}
+
+
+def raiders(count):
+    """Report JSON with `count` members, one run on day 1 each."""
+    def one(i):
+        run = {"run": 1, "damage": 100 * i, "final_hit": False, "boss": "B",
+               "elements": [], "boss_icon": "", "squad": []}
+        return {"openid": str(i), "member": f"m{i}",
+                "days": {"1": {"total": 100 * i, "runs": [run]}}}
+    return {"season": "S1", "ingested_at": "t", "compared_with": None,
+            "members": [one(i) for i in range(1, count + 1)],
+            "previous_members": []}
 
 
 @unittest.skipUnless(embeds, "discord.py is not installed")
@@ -206,6 +223,132 @@ class HistoryTest(unittest.TestCase):
         text = self.plain(embeds.history(self.data, "Bob"))
         for other in ("Alice", "Carol", "Dave"):
             self.assertNotIn(other, text)
+
+
+class FakeResponse:
+    """A stand-in for an aiohttp response carrying PNG bytes."""
+
+    def __init__(self, status=200, body=b""):
+        self.status = status
+        self.body = body
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def read(self):
+        return self.body
+
+
+class FakeSession:
+    """A stand-in http_session; every request gets the same answer."""
+
+    def __init__(self, status=200):
+        self.status = status
+        self.queries = []
+
+    def get(self, path, params=None):
+        self.queries.append(params)
+        return FakeResponse(self.status, b"png")
+
+
+class Unreachable:
+    """A session whose every request fails: the raid server is down."""
+
+    def get(self, path, params=None):
+        return self
+
+    async def __aenter__(self):
+        raise aiohttp.ClientConnectionError("unreachable")
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+@unittest.skipUnless(embeds, "discord.py is not installed")
+class BotTest(unittest.TestCase):
+    """bot.py's helpers: the link, the small embed, and show() itself."""
+
+    def setUp(self):
+        self.old = parse(load(FIXTURES / "season.json"))
+        self.new = parse(load(FIXTURES / "season2.json"))
+
+    def show(self, data, style="card", build=None, session=None, **kwargs):
+        interaction = mock.Mock(
+            response=mock.Mock(defer=mock.AsyncMock()),
+            followup=mock.Mock(send=mock.AsyncMock()))
+        with mock.patch.object(bot, "fetch",
+                               mock.AsyncMock(return_value=data)), \
+                mock.patch.object(bot, "STYLE", style), \
+                mock.patch.object(bot, "PUBLIC",
+                                  "https://raid.example.org"), \
+                mock.patch.object(bot.bot, "http_session", session):
+            asyncio.run(bot.show(interaction, build or embeds.season,
+                                 "/report", **kwargs))
+        interaction.followup.send.assert_awaited_once()
+        return interaction
+
+    def test_card_style_sends_the_link(self):
+        interaction = self.show(wrapped(self.new, self.old),
+                                table=sheet.season,
+                                card=lambda d: {"season": d["season"]})
+        self.assertEqual(interaction.followup.send.await_args.args[0],
+                         "https://raid.example.org/card?season=2026-10"
+                         "&v=2026-11-09+20%3A17%3A35")
+
+    def test_a_compare_link_gets_the_cache_buster_too(self):
+        data = {"from": "2026-09", "to": "2026-10",
+                "ingested_at": "2026-11-09 20:17:35"}
+        with mock.patch.object(bot, "PUBLIC", "https://raid.example.org"):
+            link = bot.card_url({"from": "2026-09", "to": "2026-10"}, data)
+        self.assertEqual(link, "https://raid.example.org/card?from=2026-09"
+                                "&to=2026-10&v=2026-11-09+20%3A17%3A35")
+
+    def test_card_style_posts_no_link_for_an_empty_day(self):
+        """An empty selection posts the message the text style shows."""
+        interaction = self.show(
+            wrapped(self.new, self.old),
+            build=lambda d: embeds.day(d, 99),
+            table=lambda d: sheet.day(d, 99),
+            card=lambda d: {"season": d["season"], "day": 99})
+        self.assertEqual(interaction.followup.send.await_args.args[0],
+                         "No runs on day 99 of 2026-10.")
+
+    def test_image_style_falls_back_to_text_when_unreachable(self):
+        interaction = self.show(
+            wrapped(self.new, self.old), style="image", table=sheet.season,
+            card=lambda d: {"season": d["season"]}, session=Unreachable())
+        sent = interaction.followup.send.await_args.kwargs
+        self.assertTrue(sent["embeds"])       # the coloured text tables
+        self.assertNotIn("files", sent)
+
+    def test_image_style_fetches_one_request_per_chunk(self):
+        session = FakeSession()
+        interaction = self.show(
+            raiders(13), style="both", table=sheet.season,
+            card=lambda d: {"season": d["season"]}, session=session)
+        self.assertEqual(len(session.queries), 2)   # 13 rows -> 2 chunks
+        files = interaction.followup.send.await_args.kwargs["files"]
+        self.assertEqual([f.filename for f in files],
+                         ["sheet-1.png", "sheet-2.png"])
+
+    def test_image_style_caps_the_requests_at_ten_attachments(self):
+        session = FakeSession()
+        interaction = self.show(
+            raiders(200), style="image", table=sheet.season,
+            card=lambda d: {"season": d["season"]}, session=session)
+        self.assertEqual(len(session.queries), bot.ATTACHMENTS)
+        embed = interaction.followup.send.await_args.kwargs["embed"]
+        self.assertIn("and 80 more members", embed.footer.text)
+
+    def test_picture_keeps_the_list_of_leavers(self):
+        data = json.loads(compare.as_json(
+            compare.compare(self.old, self.new), "2026-09", "2026-10"))
+        built = bot.picture(sheet.compare(data))
+        self.assertEqual(built.fields[0].name, "No runs this season")
+        self.assertIn("Carol (was #2)", built.fields[0].value)
 
 
 if __name__ == "__main__":

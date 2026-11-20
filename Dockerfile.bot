@@ -3,6 +3,7 @@ RUN useradd --uid 10001 --no-create-home raid
 COPY bot/requirements.txt /app/
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY bot/*.py /app/
+COPY blablalink_union_raid /app/blablalink_union_raid
 USER raid
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1

@@ -14,6 +14,7 @@ dependencies = []
 
 [project.optional-dependencies]
 browser = ["gallery-dl", "secretstorage; sys_platform == 'linux'"]
+card = ["Pillow>=10"]
 
 [project.scripts]
 blablalink-union-raid = "blablalink_union_raid.cli:main"

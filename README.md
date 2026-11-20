@@ -4,7 +4,9 @@ Per-member Union Raid damage from [blablalink.com](https://www.blablalink.com/):
 each member's damage in every run (up to three per day), the daily total and
 the season total.
 
-No dependencies beyond Python 3.11.
+No dependencies beyond Python 3.11. One optional extra: the server's
+link-preview cards (below) draw their images with Pillow
+(`pip install ".[card]"`).
 
 ## Usage
 
@@ -143,6 +145,9 @@ numbered per day, days start at 1. A member's total is the sum of their runs.
 python -m unittest discover -s tests -t .
 ```
 
+The card image tests need Pillow and are skipped without it, like the bot's
+tests without discord.py.
+
 ## License
 
 GNU Affero General Public License, version 3 or later (see [LICENSE](LICENSE)).
@@ -165,7 +170,8 @@ PC: push --PUT, write token--> Traefik --> api (SQLite) <--GET, read token-- bot
 - `deploy/compose.yaml` runs both behind Traefik (`raid.${DOMAIN}.${TLD}`).
   Supply `DOMAIN`, `TLD`, `RAID_WRITE_TOKEN`, `RAID_READ_TOKEN` and
   `DISCORD_TOKEN` as environment inputs; generate the tokens with
-  `openssl rand -base64 32`.
+  `openssl rand -base64 32`. Optionally `RAID_STYLE`, `RAID_PUBLIC_URL`
+  and `RAID_PUBLIC_CARD` (see below).
 
 Create the bot at <https://discord.com/developers/applications> (Bot tab
 gives `DISCORD_TOKEN`; no privileged intents needed). Invite it with an
@@ -180,6 +186,44 @@ deletes a season from the server; pushing a name again replaces it, unless
 the new data has no runs (`push` then says so and sends nothing, and the
 server refuses it too) or less than half the stored runs (`push --force`
 overrides that).
+
+### Card images and link previews (optional)
+
+The coloured text tables wrap badly on a phone. `RAID_STYLE` picks what
+the bot sends:
+
+- `ansi` (the default): the coloured text tables, as before.
+- `image`: the sheet as PNG images attached to the message, the way the
+  text tables are. They scale to the phone's width, and tapping one
+  shows it full size.
+- `both`: the coloured text tables and the images.
+- `card`: a link to the server's card page, whose preview shows the
+  images too. This one needs more: `RAID_PUBLIC_URL`, the server's public
+  address (`https://raid.example.org`), goes to the bot — for the links it
+  posts — and to the api service as well, because without it the page
+  takes its address from the request's `Host` header, which a client can
+  forge. The server also needs `RAID_PUBLIC_CARD=1`, because Discord's
+  crawler cannot send the read token — anyone with the link can then read
+  the raid data, member names included. The bot adds a version stamp to
+  its links, so a new push shows fresh data despite Discord's
+  ~30-minute preview cache.
+
+Only `/raid day`, `/raid season` and `/raid compare` send cards; the
+member views stay coloured text, which wraps fine for one member. Images
+and page come from the server's card routes, which answer the read token
+(and anyone with `RAID_PUBLIC_CARD=1`):
+
+- `GET /card?season=&day=` (or `?from=&to=`): the page whose Open Graph
+  tags describe the sheet; a component-embed payload in it stacks all
+  the images in one preview.
+- `GET /card.png?season=&day=&chunk=N`: one image of the sheet, at most
+  twelve rows at a time; the bot attaches up to ten of them.
+
+Drawing the images needs Pillow and a font; `Dockerfile.server` installs
+both, and `pip install ".[card]"` brings the Pillow part elsewhere.
+Without Pillow the bot sends the coloured text tables instead.
+`RAID_CARD_FONT` can point at another monospace TrueType font, for
+nicknames the bundled one cannot draw (it has Latin scripts only).
 
 ### Write token from OpenBao (optional)
 

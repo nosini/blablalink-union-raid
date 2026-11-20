@@ -125,9 +125,11 @@ def as_csv(changes):
     return out.getvalue()
 
 
-def as_json(changes, old_name, new_name):
+def as_json(changes, old_name, new_name, ingested_at=None):
+    """`ingested_at`, the newer push, lets links name this data's version."""
+    extra = {"ingested_at": ingested_at} if ingested_at else {}
     return json.dumps({
-        "from": old_name, "to": new_name,
+        "from": old_name, "to": new_name, **extra,
         "members": [{"openid": c.openid, "member": c.nickname,
                      "rank": c.rank, "prev_rank": c.prev_rank,
                      "move": c.move, "status": c.status,

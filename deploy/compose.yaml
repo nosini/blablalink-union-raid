@@ -25,6 +25,8 @@ services:
     environment:
       RAID_WRITE_TOKEN: ${RAID_WRITE_TOKEN}
       RAID_READ_TOKEN: ${RAID_READ_TOKEN}
+      RAID_PUBLIC_URL: ${RAID_PUBLIC_URL}
+      RAID_PUBLIC_CARD: ${RAID_PUBLIC_CARD}
     volumes:
       - "raid.data:/data"
 
@@ -49,6 +51,8 @@ services:
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       RAID_READ_TOKEN: ${RAID_READ_TOKEN}
       RAID_URL: http://api:8080
+      RAID_STYLE: ${RAID_STYLE}
+      RAID_PUBLIC_URL: ${RAID_PUBLIC_URL}
 
 volumes:
   raid.data:

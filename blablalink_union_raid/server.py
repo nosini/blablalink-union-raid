@@ -14,9 +14,14 @@ exposure are the reverse proxy's job; this listens on plain HTTP.
     GET /report?season=&day=&member=
     GET /compare?from=&to=
     GET /history             every season's runs per member, as JSON only
+    GET /card[.png]          the sheet as images for the bot to attach, or
+                             as a link-preview page: they answer the read
+                             token, or anyone with RAID_PUBLIC_CARD=1
 
 The GET endpoints answer with a text table, or with JSON for ?format=json
-(the Discord bot's input).
+(the Discord bot's input). `/card` answers with the HTML page whose Open
+Graph tags describe the sheet, `/card.png` with one image of it (`&chunk=N`,
+twelve rows per image); anyone with the link can read the raid data.
 """
 
 import hmac
@@ -28,8 +33,10 @@ import sqlite3
 import threading
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from . import card
 from . import compare as comparison
 from . import report
+from . import sheet
 from .history import HistoryError, Store
 from .model import DataError, days, parse
 
@@ -61,11 +68,16 @@ def make_handler(store, lock, write_token, read_token):
     class Handler(BaseHTTPRequestHandler):
         server_version = "union-raid"
 
-        def reply(self, status, text, kind="text/plain"):
-            body = text.encode()
+        def reply(self, status, text, kind="text/plain", headers=()):
+            body = text.encode() if isinstance(text, str) else text
             self.send_response(status)
-            self.send_header("Content-Type", f"{kind}; charset=utf-8")
+            if kind.startswith("image/"):
+                self.send_header("Content-Type", kind)
+            else:
+                self.send_header("Content-Type", f"{kind}; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            for name, value in headers:
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(body)
 
@@ -121,6 +133,8 @@ def make_handler(store, lock, write_token, read_token):
         def do_GET(self):
             url = urlsplit(self.path)
             query = {k: v[0] for k, v in parse_qs(url.query).items()}
+            if url.path in ("/card", "/card.png"):
+                return self.card(url.path, query)
             if url.path not in ("/seasons", "/report", "/compare", "/history"):
                 return self.reply(404, "not found\n")
             if not self.authorized(read_token):
@@ -169,7 +183,10 @@ def make_handler(store, lock, write_token, read_token):
                     for n, w, m, t in store.seasons()])
             if path == "/compare":
                 old, new, changes = self.pair(query)
-                return comparison.as_json(changes, old, new)
+                # the card link's cache buster: the newer of the two pushes
+                when = max(w for n, w, _, _ in store.seasons()
+                           if n in (old, new))
+                return comparison.as_json(changes, old, new, when)
             name, members, before, previous = self.selected(query)
             wanted = (query.get("member") or "").casefold()
             only = {m.openid for m in members
@@ -211,6 +228,59 @@ def make_handler(store, lock, write_token, read_token):
                 if query.get("from") and query.get("to") else names[-2:]
             return comparison.table(
                 comparison.compare(store.load(old), store.load(new)), old, new)
+
+        def card(self, path, query):
+            """The sheet as images (or as a link-preview page, same routes).
+
+            The bot fetches the images with its read token. A link preview
+            needs the routes public, because Discord's crawler cannot send
+            a token: set RAID_PUBLIC_CARD=1 for that (anyone with the link
+            can then read the raid data, member names included).
+
+            `?from=&to=` compares two seasons, anything else is the report
+            (`?season=&day=`, the last day without `day`); `v` is ignored
+            here, but kept in the links so a new push makes Discord's
+            30-minute cache fetch fresh data.
+            """
+            if os.environ.get("RAID_PUBLIC_CARD") != "1" \
+                    and not self.authorized(read_token):
+                return
+            params = {k: query[k] for k in ("v", "season", "day", "from", "to")
+                      if k in query}
+            try:
+                with lock:
+                    if "from" in query and "to" in query:
+                        table = sheet.compare(
+                            json.loads(self.read_json("/compare", params)))
+                    else:
+                        # `day` goes to sheet.day alone: asked of the
+                        # report, it drops every other day, and the
+                        # change column has no day before to compare with.
+                        report = {k: v for k, v in params.items()
+                                  if k != "day"}
+                        data = json.loads(self.read_json("/report", report))
+                        table = sheet.day(data, int(params["day"])) \
+                            if "day" in params else sheet.season(data)
+            except (HistoryError, ValueError) as exc:
+                return self.reply(404, f"{exc}\n")
+            if path == "/card.png":
+                try:
+                    chunk = int(query.get("chunk") or 0)
+                except ValueError:
+                    return self.reply(404, "bad chunk\n")
+                if not 0 <= chunk < len(card.chunk_rows(table)):
+                    return self.reply(404, "no such chunk\n")
+                try:
+                    image = card.png(table, chunk)
+                except card.CardError as exc:
+                    return self.reply(500, f"{exc}\n")
+                return self.reply(200, image, "image/png",
+                                  headers=card.CACHED)
+            base = (os.environ.get("RAID_PUBLIC_URL")
+                    or f"https://{self.headers.get('Host', 'localhost')}"
+                    ).rstrip("/")
+            return self.reply(200, card.page(table, base, params),
+                              "text/html", headers=card.CACHED)
 
         def log_message(self, *args):
             pass

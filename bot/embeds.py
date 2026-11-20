@@ -1,52 +1,42 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-"""Discord embeds built from the raid server's JSON."""
+"""Discord embeds built from the raid server's JSON.
+
+The ranking rows come from `blablalink_union_raid.sheet`; this module only
+paints them as ANSI-coloured text and wraps them in embeds.
+"""
 
 import discord
+
+from blablalink_union_raid import sheet
 
 COLOUR = discord.Colour(0xF2A900)
 BODY = 4000   # an embed description holds 4096 characters
 BUDGET = 5500  # a message holds 6000 characters of embeds
 
-
-class Empty(Exception):
-    """Nothing to show; the message is for the user."""
-
-
-def short(n):
-    for size, unit, digits in ((10**9, "B", 2), (10**6, "M", 1),
-                               (10**3, "K", 0)):
-        if abs(n) >= size:
-            return f"{n / size:.{digits}f}{unit}"
-    return str(n)
-
+# The ranking rules live in the shared module; these stay as its aliases.
+Empty = sheet.Empty
+short = sheet.short
+change = sheet.change
+counts = sheet.counts
+day_ranking = sheet.day_ranking
+last_day = sheet.last_day
+SHEET = sheet.SHEET
+SHEET_LEFT = sheet.SHEET_LEFT
 
 ESC = "\u001b"
 RESET = f"{ESC}[0m"
-COLOURS = {"green": 32, "red": 31, "yellow": 33, "blue": 34, "grey": 30}
-SHEET = ["#", "IGN", "Att", "Dmg (M)", "Chg", "Remark"]
-SHEET_LEFT = {1, 4, 5}
+ANSI = {"green": 32, "red": 31, "yellow": 33, "blue": 34, "grey": 30}
 NAME_WIDTH = 12
 
 
 def paint(text, colour):
-    return f"{ESC}[0;{COLOURS[colour]}m{text}{RESET}" if colour else text
+    return f"{ESC}[0;{ANSI[colour]}m{text}{RESET}" if colour else text
 
 
 def clip(text, width=NAME_WIDTH):
     text = text.replace("`", "'")
     return text if len(text) <= width else text[:width - 1] + "…"
-
-
-def change(previous, current):
-    """('↑2', 'green') for a move up, comparing two ranks; None: no earlier."""
-    if previous is None:
-        return "-", "grey"
-    if current < previous:
-        return f"↑{previous - current}", "green"
-    if current > previous:
-        return f"↓{current - previous}", "red"
-    return "-", "grey"
 
 
 def table_lines(header, left, rows):
@@ -101,84 +91,24 @@ def grid(title, intro, header, left, rows, footer):
     return result
 
 
-def counts(entry_or_member):
-    """(attempts, finishing blows) of a day entry or of a member's season."""
-    entries = entry_or_member["days"].values() if "days" in entry_or_member \
-        else [entry_or_member]
-    runs = [r for e in entries for r in e["runs"]]
-    return len(runs), sum(1 for r in runs if r["final_hit"])
-
-
-def day_ranking(members, number):
-    """[(member, entry)] best first, and the attempts that count as full.
-
-    Members who made every attempt come first, then the others, each by
-    damage: the order the union leader's sheet uses.
-    """
-    key = str(number)
-    played = [(m, m["days"][key]) for m in members if key in m["days"]]
-    full = max((len(e["runs"]) for _, e in played), default=0)
-    played.sort(key=lambda p: (len(p[1]["runs"]) < full, -p[1]["total"],
-                               p[0]["member"]))
-    return played, full
-
-
-def ranks(members, number):
-    """openid -> rank of a day, in the order the sheet uses."""
-    return {m["openid"]: i for i, (m, _) in
-            enumerate(day_ranking(members, number)[0], 1)}
-
-
-def last_day(members):
-    return max((int(d) for m in members for d in m["days"]), default=0)
-
-
-def sheet(data, number, before, note):
-    """The sheet for one day; `before` maps openid to an earlier rank.
-
-    With nothing to compare against (None or empty) every change is '-'.
-    """
-    played, full = day_ranking(data["members"], number)
-    if not played:
-        raise Empty(f"No runs on day {number} of {data['season']}.")
-    rows = []
-    for rank, (m, entry) in enumerate(played, 1):
-        attempts, finishers = counts(entry)
-        if not before:
-            sign, colour = "-", "grey"
-        elif m["openid"] not in before:
-            sign, colour = "New!", "yellow"
-        else:
-            sign, colour = change(before[m["openid"]], rank)
-        rows.append(([rank, clip(m["member"]), f"{attempts}/{full}",
-                      entry["total"] // 10**6, sign,
-                      f"Finisher x{finishers}" if finishers else ""],
-                     [None, None, "red" if attempts < full else None, None,
-                      colour, "blue" if finishers else None]))
-    total = sum(e["total"] for _, e in played)
-    intro = f"**Day total** {short(total)} · {len(played)} members\n"
-    footer = f"Updated {data['ingested_at']}"
-    if note:
-        footer += f" · changes against {note}"
-    return grid(f"Union Raid · {data['season']} · day {number}", intro, SHEET,
-                SHEET_LEFT, rows, footer)
+def _grid(table):
+    """A sheet as embeds, with the IGN column clipped to fit the block."""
+    ign = table.header.index("IGN") if "IGN" in table.header else None
+    rows = [(( [clip(cell) if i == ign else cell
+                for i, cell in enumerate(cells)], colours))
+            for cells, colours in table.rows]
+    return grid(table.title, f"{table.intro}\n", table.header, table.left,
+                rows, table.footer)
 
 
 def day(data, number):
     """One day, with the change since the day before."""
-    before = ranks(data["members"], number - 1) if number > 1 else None
-    return sheet(data, number, before, f"day {number - 1}" if before else "")
+    return _grid(sheet.day(data, number))
 
 
 def season(data):
     """The season's last day, compared with the same day of the season before."""
-    number = last_day(data["members"])
-    if not number:
-        raise Empty("That season has no runs.")
-    previous = data["compared_with"]
-    before = ranks(data["previous_members"], number) if previous else None
-    return sheet(data, number, before,
-                 f"{previous} day {number}" if before else "")
+    return _grid(sheet.season(data))
 
 
 HISTORY = ["Season", "#", "Att", "Dmg (M)", "Chg", "Remark"]
@@ -291,37 +221,11 @@ def member(data):
     return result
 
 
-COMPARE = ["#", "IGN", "Dmg (M)", "Chg", "Δ (M)", "Remark"]
-COMPARE_LEFT = {1, 3, 5}
-
-
 def compare(data):
-    rows, gone = [], []
-    for m in data["members"]:
-        if m["rank"] is None:
-            gone.append(f"{discord.utils.escape_markdown(m['member'])} "
-                        f"(was #{m['prev_rank']})")
-            continue
-        if m["prev_rank"]:
-            sign, colour = change(m["prev_rank"], m["rank"])
-            delta = f"{m['delta'] // 10**6:+}"
-        else:
-            sign, colour, delta = "New!", "yellow", ""
-        gain = m["level_change"]
-        remark = f"Lv {m['level']}" + (f" ({gain:+})" if gain else "") \
-            if m["level"] else ""
-        rows.append(([m["rank"], clip(m["member"]), m["total"] // 10**6, sign,
-                      delta, remark],
-                     [None, None, None, colour,
-                      "green" if delta.startswith("+") else
-                      "red" if delta.startswith("-") else None, None]))
-    if not rows:
-        raise Empty("Neither season has runs.")
-    total = sum(m["total"] for m in data["members"])
-    result = grid(f"Union Raid · {data['from']} → {data['to']}",
-                  f"**Union total** {short(total)}\n", COMPARE, COMPARE_LEFT,
-                  rows, "Change is against the earlier season")
-    if gone:
-        result[-1].add_field(name="No runs this season",
-                             value=", ".join(gone)[:1000], inline=False)
+    table = sheet.compare(data)
+    result = _grid(table)
+    if table.gone:
+        result[-1].add_field(name="No runs this season", value=", ".join(
+            discord.utils.escape_markdown(name)
+            for name in table.gone)[:1000], inline=False)
     return result
