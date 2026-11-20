@@ -198,7 +198,7 @@ cached for up to eight hours, done by that repository's
 
 ```sh
 export BLABLALINK_UNION_RAID_OPENBAO_PATH=apps/union-raid/production
-BLABLALINK_UNION_RAID=openbao ~/Git/homelab-infra/scripts/openbao-session -- \
+BLABLALINK_UNION_RAID=openbao /path/to/openbao-session -- \
   blablalink-union-raid push --url https://raid.example.org --cookies-from-browser brave --season-id 1000046
 ```
 
@@ -208,7 +208,7 @@ tool starts itself under it when there is no session:
 ```sh
 export BLABLALINK_UNION_RAID=openbao
 export BLABLALINK_UNION_RAID_OPENBAO_PATH=apps/union-raid/production
-export BLABLALINK_UNION_RAID_OPENBAO_SESSION=~/Git/homelab-infra/scripts/openbao-session
+export BLABLALINK_UNION_RAID_OPENBAO_SESSION=/path/to/openbao-session
 blablalink-union-raid push --url https://raid.example.org --cookies-from-browser brave --season-id 1000046
 ```
 
