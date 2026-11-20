@@ -33,7 +33,7 @@ def wrapped(members, previous=None):
 
 
 def season(number_of_rows):
-    """A synthetic sheet, to test splitting without a big fixture."""
+    """A synthetic sheet of any length, without a big fixture."""
     rows = [([i, f"Member{i}", "3/3", 100 + i, "-", ""], [None] * 6)
             for i in range(1, number_of_rows + 1)]
     return sheet.Sheet(f"Union Raid · S1 · day 1",
@@ -62,40 +62,22 @@ class CardTest(unittest.TestCase):
                       ' content="Union Raid · 2026-10 · day 2">', page)
         # & is escaped in the attribute; the reader decodes it back
         self.assertIn('content="https://raid.example.org/card.png'
-                      '?season=2026-10&amp;v=2026-11-09+20%3A17%3A35'
-                      '&amp;chunk=0"', page)
-        self.assertEqual(page.count('<img src="/card.png?'),
-                         len(card.chunk_rows(self.table)))
+                      '?season=2026-10&amp;v=2026-11-09+20%3A17%3A35"', page)
+        self.assertEqual(page.count('<img src="/card.png?'), 1)
 
-    def test_rows_split_into_images_of_twelve(self):
-        self.assertEqual([len(rows) for rows in card.chunk_rows(season(30))],
-                         [12, 12, 6])
-        self.assertEqual([len(rows) for rows in card.chunk_rows(season(12))],
-                         [12])
-
-    def test_component_payload_stacks_all_the_images(self):
+    def test_component_payload_shows_one_image(self):
         page = card.page(season(30), "https://raid.example.org", {})
         payload = self.payload(page)["component"]
         self.assertEqual(payload["type"], 17)
         self.assertEqual(payload["accent_color"], 0xF2A900)
         galleries = [c for c in payload["components"] if c["type"] == 12]
-        self.assertEqual(len(galleries), 3)
-        self.assertEqual([g["items"][0]["media"]["url"][-1]
-                          for g in galleries], ["0", "1", "2"])
+        self.assertEqual(len(galleries), 1)
+        self.assertEqual(galleries[0]["items"][0]["media"]["url"],
+                         "https://raid.example.org/card.png")
         texts = [c["content"] for c in payload["components"]
                  if c["type"] == 10]
         self.assertIn("**Day total** 1B · 30 members", texts[0])
         self.assertTrue(texts[-1].startswith("-# Updated t"))
-
-    def test_component_payload_caps_the_images_at_ten(self):
-        table = season(200)       # 17 images: only the first 10 are payload
-        page = card.page(table, "https://raid.example.org", {})
-        payload = self.payload(page)["component"]
-        galleries = [c for c in payload["components"] if c["type"] == 12]
-        self.assertEqual(len(galleries), card.MAX_IMAGES)
-        more = [c["content"] for c in payload["components"] if c["type"] == 10
-                and "more parts" in c["content"]]
-        self.assertEqual(len(more), 1)
 
     def test_a_leaving_member_is_listed(self):
         # Carol is in the old season and not in the new one
@@ -127,8 +109,6 @@ class CardTest(unittest.TestCase):
         self.assertEqual(image.format, "PNG")
         width, height, _, _ = card._layout(self.table)
         self.assertEqual(image.size, (width, height))
-        with self.assertRaises(IndexError):
-            card.png(self.table, 99)
 
     @unittest.skipUnless(Image, "Pillow is not installed")
     def test_long_names_are_clipped_to_the_column(self):
@@ -146,23 +126,17 @@ class CardTest(unittest.TestCase):
         """`base` can be the request's Host header; it must stay inert."""
         page = card.page(self.table, 'https://host"><script>', {})
         self.assertIn('content="https://host&quot;&gt;&lt;script&gt;'
-                      '/card.png?chunk=0"', page)
+                      '/card.png"', page)
         self.assertIn('content="https://host&quot;&gt;&lt;script&gt;/card?"',
                       page)
-        self.assertIn('<img src="/card.png?chunk=0"', page)
+        self.assertIn('<img src="/card.png"', page)
         self.assertNotIn('"><script>', page)
 
     @unittest.skipUnless(Image, "Pillow is not installed")
-    def test_all_chunks_of_one_sheet_have_the_same_width(self):
-        rows = [([i, f"m{i}", "3/3", 100, "-", ""], [None] * 6)
-                for i in range(1, card.ROWS_PER_IMAGE + 2)]
-        rows[-1][0][3] = 10 ** 7     # the widest cell is in the last chunk
-        table = sheet.Sheet("t", "i", sheet.SHEET, sheet.SHEET_LEFT,
-                            rows, "f")
-        sizes = [Image.open(io.BytesIO(card.png(table, c))).size
-                 for c in range(len(card.chunk_rows(table)))]
-        self.assertEqual(len(set(width for width, _ in sizes)), 1)
-        self.assertLess(sizes[-1][1], sizes[0][1])   # fewer rows, though
+    def test_every_row_is_in_the_one_image(self):
+        small = Image.open(io.BytesIO(card.png(season(12)))).size
+        large = Image.open(io.BytesIO(card.png(season(32)))).size
+        self.assertEqual(large[1] - small[1], 20 * card.ROW_H)
 
     @unittest.skipUnless(Image, "Pillow is not installed")
     def test_a_bad_font_file_is_a_card_error(self):

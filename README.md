@@ -193,12 +193,12 @@ The coloured text tables wrap badly on a phone. `RAID_STYLE` picks what
 the bot sends:
 
 - `ansi` (the default): the coloured text tables, as before.
-- `image`: the sheet as PNG images attached to the message, the way the
-  text tables are. They scale to the phone's width, and tapping one
+- `image`: the whole sheet as one PNG image attached to the message, the
+  way the text tables are. It scales to the phone's width, and tapping it
   shows it full size.
-- `both`: the coloured text tables and the images.
+- `both`: the coloured text tables and the image.
 - `card`: a link to the server's card page, whose preview shows the
-  images too. This one needs more: `RAID_PUBLIC_URL`, the server's public
+  image too. This one needs more: `RAID_PUBLIC_URL`, the server's public
   address (`https://raid.example.org`), goes to the bot — for the links it
   posts — and to the api service as well, because without it the page
   takes its address from the request's `Host` header, which a client can
@@ -209,17 +209,16 @@ the bot sends:
   ~30-minute preview cache.
 
 Only `/raid day`, `/raid season` and `/raid compare` send cards; the
-member views stay coloured text, which wraps fine for one member. Images
+member views stay coloured text, which wraps fine for one member. Image
 and page come from the server's card routes, which answer the read token
 (and anyone with `RAID_PUBLIC_CARD=1`):
 
 - `GET /card?season=&day=` (or `?from=&to=`): the page whose Open Graph
-  tags describe the sheet; a component-embed payload in it stacks all
-  the images in one preview.
-- `GET /card.png?season=&day=&chunk=N`: one image of the sheet, at most
-  twelve rows at a time; the bot attaches up to ten of them.
+  tags describe the sheet; a component-embed payload in it shows the
+  image in one preview.
+- `GET /card.png?season=&day=`: the whole sheet as one image.
 
-Drawing the images needs Pillow and a font; `Dockerfile.server` installs
+Drawing the image needs Pillow and a font; `Dockerfile.server` installs
 both, and `pip install ".[card]"` brings the Pillow part elsewhere.
 Without Pillow the bot sends the coloured text tables instead.
 `RAID_CARD_FONT` can point at another monospace TrueType font, for

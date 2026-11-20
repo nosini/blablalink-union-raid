@@ -322,26 +322,17 @@ class BotTest(unittest.TestCase):
             card=lambda d: {"season": d["season"]}, session=Unreachable())
         sent = interaction.followup.send.await_args.kwargs
         self.assertTrue(sent["embeds"])       # the coloured text tables
-        self.assertNotIn("files", sent)
+        self.assertNotIn("file", sent)
 
-    def test_image_style_fetches_one_request_per_chunk(self):
+    def test_image_style_sends_the_whole_sheet_as_one_image(self):
         session = FakeSession()
         interaction = self.show(
-            raiders(13), style="both", table=sheet.season,
+            raiders(32), style="both", table=sheet.season,
             card=lambda d: {"season": d["season"]}, session=session)
-        self.assertEqual(len(session.queries), 2)   # 13 rows -> 2 chunks
-        files = interaction.followup.send.await_args.kwargs["files"]
-        self.assertEqual([f.filename for f in files],
-                         ["sheet-1.png", "sheet-2.png"])
-
-    def test_image_style_caps_the_requests_at_ten_attachments(self):
-        session = FakeSession()
-        interaction = self.show(
-            raiders(200), style="image", table=sheet.season,
-            card=lambda d: {"season": d["season"]}, session=session)
-        self.assertEqual(len(session.queries), bot.ATTACHMENTS)
-        embed = interaction.followup.send.await_args.kwargs["embed"]
-        self.assertIn("and 80 more members", embed.footer.text)
+        self.assertEqual(len(session.queries), 1)
+        self.assertNotIn("chunk", session.queries[0])
+        sent = interaction.followup.send.await_args.kwargs
+        self.assertEqual(sent["file"].filename, "sheet.png")
 
     def test_picture_keeps_the_list_of_leavers(self):
         data = json.loads(compare.as_json(

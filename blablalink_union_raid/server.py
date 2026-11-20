@@ -14,14 +14,14 @@ exposure are the reverse proxy's job; this listens on plain HTTP.
     GET /report?season=&day=&member=
     GET /compare?from=&to=
     GET /history             every season's runs per member, as JSON only
-    GET /card[.png]          the sheet as images for the bot to attach, or
+    GET /card[.png]          the sheet as an image for the bot to attach, or
                              as a link-preview page: they answer the read
                              token, or anyone with RAID_PUBLIC_CARD=1
 
 The GET endpoints answer with a text table, or with JSON for ?format=json
 (the Discord bot's input). `/card` answers with the HTML page whose Open
-Graph tags describe the sheet, `/card.png` with one image of it (`&chunk=N`,
-twelve rows per image); anyone with the link can read the raid data.
+Graph tags describe the sheet, `/card.png` with the whole sheet as one image; anyone with the link can
+read the raid data.
 """
 
 import hmac
@@ -265,13 +265,7 @@ def make_handler(store, lock, write_token, read_token):
                 return self.reply(404, f"{exc}\n")
             if path == "/card.png":
                 try:
-                    chunk = int(query.get("chunk") or 0)
-                except ValueError:
-                    return self.reply(404, "bad chunk\n")
-                if not 0 <= chunk < len(card.chunk_rows(table)):
-                    return self.reply(404, "no such chunk\n")
-                try:
-                    image = card.png(table, chunk)
+                    image = card.png(table)
                 except card.CardError as exc:
                     return self.reply(500, f"{exc}\n")
                 return self.reply(200, image, "image/png",

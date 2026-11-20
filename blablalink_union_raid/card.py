@@ -3,15 +3,14 @@
 """The raid sheet as a link-preview card: PNG images and the page behind them.
 
 Discord builds a link preview by fetching the page at `/card` and reading
-its Open Graph tags, so the sheet is drawn to PNG images that stay readable
-at the ~400 pixels a preview shows. A taller table is split into several
-images of `ROWS_PER_IMAGE` rows; the page carries a component-embed payload
-that stacks them all inside one preview, with the plain Open Graph tags as
-the fallback for clients that show neither.
+its Open Graph tags, so the whole sheet is drawn to one PNG image; the
+page carries a component-embed payload that shows it inside one preview,
+with the plain Open Graph tags as the fallback for clients that show
+neither.
 
 Drawing needs Pillow, an optional dependency (`pip install ".[card]"`).
 Without it the page is still served, just without image dimensions and
-without the images themselves.
+without the image itself.
 
 Nicknames are drawn with a Latin font; characters it lacks (CJK, emoji)
 appear as replacement boxes.
@@ -24,8 +23,6 @@ import json
 import os
 from urllib.parse import urlencode
 
-ROWS_PER_IMAGE = 12   # rows per PNG; one preview shows ~400px of width
-MAX_IMAGES = 10       # Discord's cap for one component embed
 NAME_CHARS = 13       # an IGN is clipped to this many characters
 
 # Discord caches a preview for ~30 minutes; a new push busts it with ?v=
@@ -124,18 +121,8 @@ def fonts():
     return _FONTS
 
 
-def chunk_rows(table):
-    """The sheet's rows, split into the images that each show a part."""
-    return [table.rows[i:i + ROWS_PER_IMAGE]
-            for i in range(0, len(table.rows), ROWS_PER_IMAGE)]
-
-
-def _layout(table, chunk=0):
-    """(width, height, column widths, drawn cell texts) of one image.
-
-    The columns are measured over every row of the table, so all its
-    images come out equally wide; the height follows this image's rows.
-    """
+def _layout(table):
+    """(width, height, column widths, drawn cell texts) of the image."""
     pen = fonts()
     ign = table.header.index("IGN") if "IGN" in table.header else None
     cells = [[pen.clip(str(c)) if i == ign else str(c)
@@ -145,20 +132,18 @@ def _layout(table, chunk=0):
                        [row[i] for row in cells])) + 2 * GAP
                for i in range(len(table.header))]
     width = 2 * PAD + sum(columns)
-    shown = cells[chunk * ROWS_PER_IMAGE:(chunk + 1) * ROWS_PER_IMAGE]
-    height = (PAD + TITLE_H + INTRO_H + HEAD_H + len(shown) * ROW_H
+    height = (PAD + TITLE_H + INTRO_H + HEAD_H + len(cells) * ROW_H
               + FOOTER_H + PAD)
-    return width, height, columns, shown
+    return width, height, columns, cells
 
 
-def png(table, chunk=0):
-    """One image of the sheet as PNG bytes."""
+def png(table):
+    """The sheet as one PNG image, every row included."""
     try:
         from PIL import Image, ImageDraw
     except ImportError as exc:
         raise CardError("Pillow is not installed") from exc
-    rows = chunk_rows(table)[chunk]
-    width, height, columns, cells = _layout(table, chunk)
+    width, height, columns, cells = _layout(table)
     pen = fonts()
     image = Image.new("RGB", (width, height), PAPER)
     draw = ImageDraw.Draw(image)
@@ -177,7 +162,7 @@ def png(table, chunk=0):
                                           - pen.length(head)))
         text((x, y), head, "body", ACCENT)
     y += HEAD_H
-    for number, ((_, colours), row) in enumerate(zip(rows, cells)):
+    for number, ((_, colours), row) in enumerate(zip(table.rows, cells)):
         if number % 2:      # a faint zebra line to follow the rows
             draw.rectangle((0, y, width, y + ROW_H), fill=ZEBRA)
         for i, value in enumerate(row):
@@ -192,27 +177,21 @@ def png(table, chunk=0):
     return out.getvalue()
 
 
-def _component(table, urls):
-    """The component-embed payload: the stacked images as one preview."""
+def _component(table, url):
+    """The component-embed payload: the image as one preview."""
     parts = [{"type": 10, "content": f"## **{table.title}**\n{table.intro}"}]
     if table.gone:
         gone = ", ".join(name.replace("`", "'") for name in table.gone[:12])
         parts.append({"type": 10,
                       "content": f"-# No runs this season: {gone}"})
-    for i, url in enumerate(urls[:MAX_IMAGES]):
-        parts.append({"type": 12, "items": [
-            {"media": {"url": url},
-             "description": f"part {i + 1} of the table"}]})
-    if len(urls) > MAX_IMAGES:
-        parts.append({"type": 10, "content":
-                      f"-# …and {len(urls) - MAX_IMAGES} more parts"
-                      " on the page"})
+    parts.append({"type": 12, "items": [
+        {"media": {"url": url}, "description": "the table"}]})
     parts.append({"type": 10, "content": f"-# {table.footer}"})
     payload = json.dumps({"component": {
         "type": 17, "accent_color": int(ACCENT[1:], 16),
         "components": parts}}, separators=(",", ":"))
-    while len(payload) > 2950 and len(parts) > 3:  # Discord caps at 3000
-        parts.pop(max(1, len(parts) - 2))
+    if len(payload) > 2950 and table.gone:  # Discord caps at 3000
+        del parts[1]       # the image matters more than who is missing
         payload = json.dumps({"component": {
             "type": 17, "accent_color": int(ACCENT[1:], 16),
             "components": parts}}, separators=(",", ":"))
@@ -247,7 +226,7 @@ footer{{color:#949ba4;font-size:.85rem;margin-top:1rem}}
 <main>
 <h1>{title}</h1>
 <p class="intro">{intro}</p>
-{images}
+{img}
 {gone}
 <footer>{footer}</footer>
 </main>
@@ -258,11 +237,10 @@ footer{{color:#949ba4;font-size:.85rem;margin-top:1rem}}
 
 def page(table, base, params):
     """The page Discord reads: Open Graph tags, the component payload and
-    the images, so the link opens the same sheet for people."""
+    the image, so the link opens the same sheet for people."""
     query = urlencode(params)
-    chunk = f"?{query}&chunk=" if query else "?chunk="
-    count = len(chunk_rows(table))
-    urls = [f"{base}/card.png{chunk}{i}" for i in range(count)]
+    src = f"/card.png?{query}" if query else "/card.png"
+    url = base + src
     title = html.escape(table.title)
     intro = html.escape(table.intro.replace("**", ""))
     try:
@@ -274,17 +252,14 @@ def page(table, base, params):
     # `base` may be the request's Host header: every URL is escaped so it
     # cannot break out of the attribute or element it is written into.
     # (The payload keeps them raw: JSON escapes are its own protection.)
-    srcs = [html.escape(f"/card.png{chunk}{i}") for i in range(count)]
-    images = "\n".join(
-        f'<img src="{src}" alt="part {i + 1} of the table">'
-        for i, src in enumerate(srcs))
+    image = f'<img src="{html.escape(src)}" alt="the table">'
     gone = ('<p class="intro">No runs this season: '
             + html.escape(", ".join(table.gone)) + "</p>") \
         if table.gone else ""
     # < would let a nickname close the script tag; JSON escapes are safe.
-    payload = _component(table, urls).replace("<", "\\u003c")
+    payload = _component(table, url).replace("<", "\\u003c")
     return PAGE.format(
-        title=title, intro=intro, image=html.escape(urls[0]), dims=dims,
+        title=title, intro=intro, image=html.escape(url), dims=dims,
         url=html.escape(f"{base}/card?{query}"), accent=ACCENT,
-        payload=payload, images=images, gone=gone,
+        payload=payload, img=image, gone=gone,
         footer=html.escape(table.footer))

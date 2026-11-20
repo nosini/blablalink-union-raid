@@ -204,7 +204,7 @@ class ServerTest(unittest.TestCase):
                       ' content="summary_large_image">', page)
         self.assertRegex(
             page, r'<meta property="og:image" '
-                  r'content="https://[^"]+/card\.png\?chunk=0">')
+                  r'content="https://[^"]+/card\.png">')
         self.assertIn("discord:component-embed", page)
         page = self.call("GET", "/card?day=1", "r-token")[1]
         self.assertIn('<meta property="og:title"'
@@ -225,10 +225,6 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.call("GET", "/card", "r-token")[0], 404)
         self.two_seasons()
         self.assertEqual(self.call("GET", "/card?day=x", "r-token")[0], 404)
-        self.assertEqual(
-            self.call("GET", "/card.png?chunk=x", "r-token")[0], 404)
-        self.assertEqual(
-            self.call("GET", "/card.png?chunk=99", "r-token")[0], 404)
 
     def test_the_card_images(self):
         self.two_seasons()

@@ -8,10 +8,10 @@ so it needs no open port.
 RAID_STYLE picks what `/raid day`, `/raid season` and `/raid compare` send:
 
 - `ansi` (the default): the table as coloured text.
-- `image`: the sheet as PNG images attached to the message, which fit a
+- `image`: the sheet as one PNG image attached to the message, which fits a
   phone where the text tables wrap. Needs the server's Pillow.
-- `both`: the coloured text and the images.
-- `card`: a link to the server's card page, whose preview shows the images
+- `both`: the coloured text and the image.
+- `card`: a link to the server's card page, whose preview shows the image
   too. Needs RAID_PUBLIC_URL, the server's public address, and the
   server's RAID_PUBLIC_CARD=1 so Discord's crawler can read the page.
 
@@ -21,7 +21,6 @@ Member views stay coloured text in every style.
 import asyncio
 import io
 import os
-from math import ceil
 from urllib.parse import urlencode
 
 import aiohttp
@@ -29,14 +28,12 @@ import discord
 from discord import app_commands
 
 from blablalink_union_raid import sheet
-from blablalink_union_raid.card import ROWS_PER_IMAGE
 
 import embeds
 
 # Compose hands an unset RAID_STYLE over as "": treat empty as unset.
 STYLE = (os.environ.get("RAID_STYLE") or "ansi").strip().lower()
 PUBLIC = os.environ.get("RAID_PUBLIC_URL", "").rstrip("/")
-ATTACHMENTS = 10   # the most files one Discord message can carry
 
 class Bot(discord.Client):
     def __init__(self):
@@ -83,17 +80,15 @@ async def show(interaction, build, path, table=None, card=None,
         data = await fetch(path, **params)
         if table and STYLE in ("image", "both"):
             drawn = table(data)
-            count = min(ceil(len(drawn.rows) / ROWS_PER_IMAGE),
-                        ATTACHMENTS)
-            files = await images(card(data), count)
-            if not files:      # the server cannot draw (or is unreachable)
+            image = await sheet_image(card(data))
+            if image is None:      # the server cannot draw (or is unreachable)
                 await interaction.followup.send(embeds=build(data))
                 return
             if STYLE == "image":
                 await interaction.followup.send(
-                    embed=picture(drawn), files=files)
+                    embed=picture(drawn), file=image)
                 return
-            await interaction.followup.send(embeds=build(data), files=files)
+            await interaction.followup.send(embeds=build(data), file=image)
             return
         if card and STYLE == "card":
             if table:
@@ -107,41 +102,27 @@ async def show(interaction, build, path, table=None, card=None,
         await interaction.followup.send(f"{exc}")
 
 
-async def images(query, count):
-    """The sheet's PNG chunks: `count` images, fetched together.
-
-    A chunk that cannot be fetched is left out — the server being down
-    or unable to draw leaves none, and the caller sends text instead.
-    """
-    async def one(chunk):
-        try:
-            async with bot.http_session.get(
-                    "/card.png", params={**query, "chunk": chunk}
-            ) as response:
-                if response.status != 200:
-                    return None
-                return discord.File(
-                    io.BytesIO(await response.read()),
-                    f"sheet-{chunk + 1}.png")
-        except (aiohttp.ClientError, asyncio.TimeoutError):
-            return None
-    found = await asyncio.gather(*[one(i) for i in range(count)])
-    return [f for f in found if f is not None]
+async def sheet_image(query):
+    """The whole sheet as one PNG, or None when the server is down or
+    cannot draw it; the caller then sends text instead."""
+    try:
+        async with bot.http_session.get("/card.png", params=query) as response:
+            if response.status != 200:
+                return None
+            return discord.File(io.BytesIO(await response.read()), "sheet.png")
+    except (aiohttp.ClientError, asyncio.TimeoutError):
+        return None
 
 
 def picture(table):
-    """The small embed that carries the images' title, totals and footer."""
+    """The small embed that carries the image's title, totals and footer."""
     result = discord.Embed(title=table.title, description=table.intro,
                             colour=embeds.COLOUR)
     if table.gone:    # compare: who has no runs in the newer season
         result.add_field(name="No runs this season", value=", ".join(
             discord.utils.escape_markdown(name)
             for name in table.gone)[:1000], inline=False)
-    footer = table.footer
-    missing = len(table.rows) - ATTACHMENTS * ROWS_PER_IMAGE
-    if missing > 0:      # more members than ten images can carry
-        footer += f" · and {missing} more members"
-    result.set_footer(text=footer)
+    result.set_footer(text=table.footer)
     return result
 
 
