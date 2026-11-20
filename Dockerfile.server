@@ -1,8 +1,11 @@
 FROM python:3.11-slim@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535
+# The card images' font and Pillow, pinned; change the versions here to update.
+# Debian drops a superseded package version, so the build then fails until the
+# font pin follows it.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-liberation \
+    && apt-get install -y --no-install-recommends fonts-liberation=1:2.1.5-3 \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir "Pillow>=10"
+    && pip install --no-cache-dir "Pillow==13.0.0"
 RUN useradd --uid 10001 --no-create-home raid && mkdir /data && chown raid /data
 COPY blablalink_union_raid /app/blablalink_union_raid
 USER raid
